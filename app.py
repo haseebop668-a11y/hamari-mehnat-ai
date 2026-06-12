@@ -2,8 +2,8 @@ import os
 import sys
 import subprocess
 
-# --- 1. FORCE INSTALLATION ON CLOUD ---
-# Agar autogen missing hai, to yeh line zandah-bazi se use install kar degi
+# --- 1. ZABARDASTI AUTOGEN INSTALL KARNA ---
+# Agar cloud requirements.txt ko ignore kar raha hai, to yeh hissa khud install karega
 try:
     import autogen
 except ModuleNotFoundError:
@@ -14,7 +14,7 @@ import streamlit as st
 import hashlib
 import json
 
-# --- 2. STREAMLIT INTERFACE ---
+# --- 2. STREAMLIT CONFIG & INTERFACE ---
 st.set_page_config(page_title="Hamari Mehnat AI Portal", layout="wide")
 
 # "1234" ka secure SHA-256 hash
