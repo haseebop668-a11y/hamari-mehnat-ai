@@ -1,12 +1,20 @@
+import subprocess
+import sys
+
+# Agar autogen missing ho to cloud khud ba khud install kar le
+try:
+    import autogen
+except ModuleNotFoundError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyautogen"])
+    import autogen
+
 import streamlit as st
-import autogen
 import hashlib
 import json
 
 st.set_page_config(page_title="Hamari Mehnat AI Portal", layout="wide")
 
-# "1234" ka secure SHA-256 hash
-CORRECT_PASSWORD_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
+CORRECT_PASSWORD_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4" # "1234"
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -32,7 +40,7 @@ else:
                 try:
                     GROQ_KEY = st.secrets["GROQ_API_KEY"]
                 except KeyError:
-                    st.error("🔑 API Key missing! Please add 'GROQ_API_KEY' in Streamlit Advanced Settings -> Secrets.")
+                    st.error("🔑 API Key missing! Please add 'GROQ_API_KEY' in Streamlit Secrets.")
                     st.stop()
                 
                 config_list = [{
@@ -64,4 +72,3 @@ else:
                 
                 json_string = json.dumps(chat_data, indent=4)
                 st.download_button(label="📥 Download Discussion History", file_name="history.json", mime="application/json", data=json_string)
-                
