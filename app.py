@@ -2,19 +2,19 @@ import os
 import sys
 import subprocess
 
-# 1. Zabardasti Cloud ke environment mein pyautogen install karwana
+# --- 1. FORCE INSTALLATION ON CLOUD ---
+# Agar autogen missing hai, to yeh line zandah-bazi se use install kar degi
 try:
     import autogen
 except ModuleNotFoundError:
-    # Yeh command cloud ko har haal mein install karne par majboor karegi
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--target=/mount/src/hamari-mehnat-ai", "pyautogen"])
-    sys.path.append("/mount/src/hamari-mehnat-ai")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyautogen"])
     import autogen
 
 import streamlit as st
 import hashlib
 import json
 
+# --- 2. STREAMLIT INTERFACE ---
 st.set_page_config(page_title="Hamari Mehnat AI Portal", layout="wide")
 
 # "1234" ka secure SHA-256 hash
