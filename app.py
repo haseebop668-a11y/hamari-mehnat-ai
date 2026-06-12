@@ -1,11 +1,14 @@
-import subprocess
+import os
 import sys
+import subprocess
 
-# Agar autogen missing ho to cloud khud ba khud install kar le
+# 1. Zabardasti Cloud ke environment mein pyautogen install karwana
 try:
     import autogen
 except ModuleNotFoundError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyautogen"])
+    # Yeh command cloud ko har haal mein install karne par majboor karegi
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "--target=/mount/src/hamari-mehnat-ai", "pyautogen"])
+    sys.path.append("/mount/src/hamari-mehnat-ai")
     import autogen
 
 import streamlit as st
@@ -14,7 +17,8 @@ import json
 
 st.set_page_config(page_title="Hamari Mehnat AI Portal", layout="wide")
 
-CORRECT_PASSWORD_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4" # "1234"
+# "1234" ka secure SHA-256 hash
+CORRECT_PASSWORD_HASH = "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4"
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -72,3 +76,4 @@ else:
                 
                 json_string = json.dumps(chat_data, indent=4)
                 st.download_button(label="📥 Download Discussion History", file_name="history.json", mime="application/json", data=json_string)
+                
