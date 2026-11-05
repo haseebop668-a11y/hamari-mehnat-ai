@@ -47,6 +47,8 @@ def main() -> int:
     checks = [
         ("Arbeitnow", "https://www.arbeitnow.com/api/job-board-api?page=1", "data"),
         ("Remotive", "https://remotive.com/api/remote-jobs?search=mechanic&limit=5", "jobs"),
+        ("Himalayas", "https://himalayas.app/jobs/api/search?q=mechanic&page=1", "jobs"),
+        ("Jobicy", "https://jobicy.com/api/v2/remote-jobs?count=5&tag=mechanic", "jobs"),
     ]
     failed = []
     for name, url, collection in checks:
