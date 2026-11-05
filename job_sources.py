@@ -12,7 +12,7 @@ ALIASES={"uk":["united kingdom","england","scotland","wales"],"uae":["uae","unit
 def _id(*parts:str)->str:
     return hashlib.sha256("|".join(str(x or "") for x in parts).encode()).hexdigest()[:24]
 def _clean(v:Any)->str:
-    return re.sub(r"\\s+"," ",html.unescape(re.sub(r"<[^>]+>"," ",str(v or "")))).strip()
+    return re.sub(r"\s+"," ",html.unescape(re.sub(r"<[^>]+>"," ",str(v or "")))).strip()
 def _country_match(location:str,countries:list[str])->str|None:
     text=(location or "").lower()
     for c in countries:
