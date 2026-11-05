@@ -56,7 +56,7 @@ class JobSourceClient(
             }
             SourceResult("Arbeitnow", found.distinctBy { it.id })
         } catch (e: Exception) {
-            SourceResult("Arbeitnow", found, e.javaClass.simpleName)
+            SourceResult("Arbeitnow", found, e.javaClass.simpleName + ": " + (e.message ?: "request failed"))
         }
     }
 
