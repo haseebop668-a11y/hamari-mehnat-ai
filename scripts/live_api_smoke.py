@@ -41,6 +41,17 @@ def check_model_metadata() -> None:
         if size and int(size) != 695_755_488:
             raise RuntimeError(f"Model endpoint size mismatch: expected 695755488, received {size}")
         print(f"PASS Hugging Face model endpoint: HTTP 200, Content-Length={size or 'not supplied'}")
+    # Verify the binary download route without fetching the full ~696 MB model.
+    ranged = urllib.request.Request(
+        MODEL_URL,
+        method="GET",
+        headers={"User-Agent": USER_AGENT, "Range": "bytes=0-3"},
+    )
+    with urllib.request.urlopen(ranged, timeout=30) as response:
+        magic = response.read(4)
+        if magic != b"GGUF":
+            raise RuntimeError(f"Model download did not begin with GGUF magic bytes: {magic!r}")
+        print(f"PASS Hugging Face model binary range request: HTTP {response.status}, GGUF header verified")
 
 
 def main() -> int:
