@@ -22,7 +22,9 @@ class JobSourceClientTest {
             http = OkHttpClient(),
             arbeitnowBaseUrl = server.url("/jobs").toString().trimEnd('/'),
             greenhouseBaseUrl = server.url("/greenhouse").toString().trimEnd('/'),
-            leverBaseUrl = server.url("/lever").toString().trimEnd('/')
+            leverBaseUrl = server.url("/lever").toString().trimEnd('/'),
+            himalayasBaseUrl = server.url("/himalayas").toString().trimEnd('/'),
+            jobicyBaseUrl = server.url("/jobicy").toString().trimEnd('/')
         )
     }
 
@@ -55,4 +57,34 @@ class JobSourceClientTest {
         assertTrue(result.jobs.isEmpty())
         assertEquals("IllegalStateException", result.error)
     }
+    @Test fun parsesHimalayasApplicationAndSourceAttributionLinks() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(
+            """{"jobs":[{"title":"Remote Diesel Mechanic","excerpt":"Heavy equipment maintenance","description":"Hydraulics and maintenance","companyName":"Example Mining","locationRestrictions":[{"alpha2":"AU","name":"Australia","slug":"australia"}],"categories":["Mechanic"],"applicationLink":"https://careers.example/apply/1","guid":"example-remote-diesel","expiryDate":9999999999999}]}"""
+        ))
+        val result = client.searchHimalayas("diesel", listOf("Australia"))
+        assertNull(result.error)
+        assertEquals(1, result.jobs.size)
+        assertEquals("https://careers.example/apply/1", result.jobs.first().sourceUrl)
+        assertEquals("https://himalayas.app", result.jobs.first().sourcePageUrl)
+    }
+
+    @Test fun ignoresExpiredHimalayasListings() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(
+            """{"jobs":[{"title":"Diesel Mechanic","description":"Diesel","companyName":"Example","locationRestrictions":[],"applicationLink":"https://careers.example/apply/1","guid":"expired-job","expiryDate":1}]}"""
+        ))
+        val result = client.searchHimalayas("diesel", listOf("Australia"))
+        assertTrue(result.jobs.isEmpty())
+    }
+
+    @Test fun parsesJobicyPublicRemoteJobs() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(
+            """{"jobs":[{"id":123,"url":"https://jobicy.com/jobs/example","jobTitle":"Remote Diesel Mechanic","companyName":"Example Mining","jobGeo":"Anywhere","jobDescription":"Diesel maintenance","jobIndustry":["Mechanic"]}]}"""
+        ))
+        val result = client.searchJobicy("diesel", listOf("Australia"), 10)
+        assertNull(result.error)
+        assertEquals(1, result.jobs.size)
+        assertEquals("Jobicy", result.jobs.first().sourceName)
+        assertEquals("Remote", result.jobs.first().country)
+    }
+
 }
