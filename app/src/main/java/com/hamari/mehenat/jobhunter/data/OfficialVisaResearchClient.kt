@@ -1,8 +1,9 @@
 package com.hamari.mehenat.jobhunter.data
 
-import android.text.Html
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.jsoup.Jsoup
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 
 data class VisaResearchResult(
@@ -33,15 +34,21 @@ class OfficialVisaResearchClient(
                 if (!response.isSuccessful) {
                     return VisaResearchResult(source, now, response.code, "", "HTTP ${response.code}")
                 }
-                val html = response.body?.string().orEmpty()
-                val visible = html
-                    .replace(Regex("(?is)<(script|style|noscript)[^>]*>.*?</\\1>"), " ")
-                    .replace(Regex("(?is)<[^>]+>"), " ")
-                val plain = Html.fromHtml(visible, Html.FROM_HTML_MODE_LEGACY)
-                    .toString()
-                    .replace(Regex("\\s+"), " ")
-                    .trim()
-                    .take(12000)
+                val body = response.body ?: error("Empty page response")
+                val output = ByteArrayOutputStream()
+                body.byteStream().use { input ->
+                    val buffer = ByteArray(8192)
+                    var total = 0
+                    while (total < MAX_HTML_BYTES) {
+                        val count = input.read(buffer, 0, minOf(buffer.size, MAX_HTML_BYTES - total))
+                        if (count < 0) break
+                        output.write(buffer, 0, count)
+                        total += count
+                    }
+                }
+                val document = Jsoup.parse(output.toString(Charsets.UTF_8.name()))
+                document.select("script,style,noscript,nav,footer").remove()
+                val plain = document.text().replace(Regex("\\s+"), " ").trim().take(MAX_TEXT_CHARS)
                 if (plain.isBlank()) {
                     VisaResearchResult(source, now, response.code, "", "No readable page text was returned.")
                 } else {
@@ -51,5 +58,10 @@ class OfficialVisaResearchClient(
         } catch (e: Exception) {
             VisaResearchResult(source, now, null, "", e.javaClass.simpleName + ": " + (e.message ?: "request failed"))
         }
+    }
+
+    companion object {
+        private const val MAX_HTML_BYTES = 2 * 1024 * 1024
+        private const val MAX_TEXT_CHARS = 12000
     }
 }
