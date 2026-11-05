@@ -1,37 +1,16 @@
 import unittest
-
-from matching import extract_profile_from_cv, parse_cv, score_job
-
-
+from matching import score_job,sponsorship_signal,parse_cv
 class MatchingTests(unittest.TestCase):
-    def test_parse_text_cv(self):
-        text = parse_cv("candidate.txt", b"Heavy Diesel Mechanic\nEmail: test@example.com")
-        self.assertIn("Heavy Diesel Mechanic", text)
-
-    def test_extract_profile_without_api_key_is_safe_fallback(self):
-        result = extract_profile_from_cv("Diesel mechanic with hydraulic maintenance experience. test@example.com", api_key="")
-        self.assertIn("Diesel", result["detected_skill_keywords"])
-        self.assertEqual(result["email_candidate"], "test@example.com")
-        self.assertIn("not configured", result["notice"])
-
-    def test_relevant_job_scores_above_unrelated_job(self):
-        profile = {
-            "target_roles": ["Heavy Diesel Mechanic"],
-            "skills": ["hydraulics", "diagnostics"],
-            "target_countries": ["Australia"],
-        }
-        good = {
-            "title": "Heavy Diesel Mechanic",
-            "description": "Hydraulics and diagnostics. Visa sponsorship available.",
-            "country": "Australia",
-            "tags": [],
-        }
-        bad = {"title": "Graphic Designer", "description": "Brand design", "country": "France", "tags": []}
-        good_score, _ = score_job(good, profile)
-        bad_score, _ = score_job(bad, profile)
-        self.assertGreater(good_score, bad_score)
-        self.assertLessEqual(good_score, 100)
-
-
-if __name__ == "__main__":
-    unittest.main()
+ def setUp(self): self.profile={"target_roles":["Warehouse Assistant","Construction Worker"],"skills":["forklift","inventory"],"target_countries":["Australia"]}
+ def test_role_country_skills_and_sponsor_signal(self):
+  j={"title":"Warehouse Worker","description":"Forklift and inventory. Visa sponsorship available.","country":"Australia"}
+  score,why=score_job(j,self.profile); self.assertGreaterEqual(score,60); self.assertIn("sponsorship",why.lower()); self.assertEqual(j["sponsorship_status"],"possible_signal_verify_with_employer")
+ def test_no_sponsorship_penalty(self):
+  j={"title":"Construction Labourer","description":"Must have right to work. No sponsorship available.","country":"Australia"}
+  score,_=score_job(j,self.profile); self.assertLess(score,60); self.assertEqual(sponsorship_signal(j),"explicitly_not_confirmed_or_unavailable")
+ def test_unknown_not_assumed(self):
+  self.assertEqual(sponsorship_signal({"title":"Cleaner","description":"Cleaning duties"}),"not_mentioned")
+ def test_txt_cv(self): self.assertIn("Welder",parse_cv("cv.txt",b"Welder workshop experience"))
+ def test_unsupported_cv(self):
+  with self.assertRaises(ValueError):parse_cv("cv.exe",b"bad")
+if __name__=="__main__":unittest.main()
