@@ -1,0 +1,83 @@
+package com.hamari.mehenat.jobhunter.data
+
+import android.content.ContentValues
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import com.hamari.mehenat.jobhunter.domain.JobListing
+
+data class TrackedApplication(
+    val id: String,
+    val title: String,
+    val company: String,
+    val url: String,
+    val stage: String
+)
+
+class ApplicationTrackerStore(context: Context) :
+    SQLiteOpenHelper(context.applicationContext, "personal_job_tracker.db", null, 1) {
+
+    override fun onCreate(db: SQLiteDatabase) {
+        db.execSQL(
+            """CREATE TABLE applications (
+                id TEXT PRIMARY KEY NOT NULL,
+                title TEXT NOT NULL,
+                company TEXT NOT NULL,
+                source_url TEXT NOT NULL,
+                stage TEXT NOT NULL DEFAULT 'Saved',
+                created_at INTEGER NOT NULL
+            )""".trimIndent()
+        )
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        // Schema migrations are added with version increments; never drop user tracking data.
+    }
+
+    fun save(job: JobListing): Boolean {
+        val values = ContentValues().apply {
+            put("id", job.id)
+            put("title", job.title.take(300))
+            put("company", job.company.take(300))
+            put("source_url", job.sourceUrl.take(2048))
+            put("stage", "Saved")
+            put("created_at", System.currentTimeMillis())
+        }
+        return writableDatabase.insertWithOnConflict(
+            "applications", null, values, SQLiteDatabase.CONFLICT_IGNORE
+        ) != -1L
+    }
+
+    fun all(): List<TrackedApplication> {
+        val result = mutableListOf<TrackedApplication>()
+        readableDatabase.query(
+            "applications",
+            arrayOf("id", "title", "company", "source_url", "stage"),
+            null, null, null, null, "created_at DESC"
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                result += TrackedApplication(
+                    id = cursor.getString(0),
+                    title = cursor.getString(1),
+                    company = cursor.getString(2),
+                    url = cursor.getString(3),
+                    stage = cursor.getString(4)
+                )
+            }
+        }
+        return result
+    }
+
+    fun setStage(id: String, stage: String): Boolean {
+        require(stage in ALLOWED_STAGES) { "Unsupported application stage" }
+        val values = ContentValues().apply { put("stage", stage) }
+        return writableDatabase.update("applications", values, "id = ?", arrayOf(id)) > 0
+    }
+
+    fun delete(id: String): Boolean =
+        writableDatabase.delete("applications", "id = ?", arrayOf(id)) > 0
+
+    companion object {
+        private val ALLOWED_STAGES = setOf("Saved", "Applied", "Interview", "Offer", "Rejected")
+    }
+}
