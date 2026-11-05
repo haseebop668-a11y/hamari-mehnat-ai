@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.sp
 import com.hamari.mehenat.jobhunter.data.EncryptedDocumentVault
 import com.hamari.mehenat.jobhunter.data.JobSourceClient
 import com.hamari.mehenat.jobhunter.data.LocalProfileStore
+import com.hamari.mehenat.jobhunter.data.LocalModelManager
+import com.hamari.mehenat.jobhunter.ai.NativeLlama
 import com.hamari.mehenat.jobhunter.data.ApplicationTrackerStore
 import com.hamari.mehenat.jobhunter.domain.JobListing
 import kotlinx.coroutines.Dispatchers
@@ -175,14 +177,76 @@ fun TrackerScreen(context: Context) {
 }
 
 @Composable
-fun LocalAiScreen() {
+fun LocalAiScreen(context: Context) {
+    var status by remember { mutableStateOf("Model not downloaded. Internet is required only for the first model download.") }
+    var response by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var progress by remember { mutableIntStateOf(0) }
+    var loaded by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val manager = remember(context) { LocalModelManager(context) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("On-device AI", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
         Text("Local model runtime is the required V1 path. No cloud AI provider will receive your CV.", color = ScreenMuted, fontSize = 12.sp)
         Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Model installation not yet enabled", color = ScreenGold, fontWeight = FontWeight.SemiBold)
-                Text("Candidate checkpoints are being evaluated for model-card provenance, redistribution license, Android ARM64 compatibility, memory use and Urdu/Roman Urdu quality. The app will not show a model as ready until checksum verification and an on-device inference test pass.", color = ScreenMuted, fontSize = 12.sp)
+                Text("LFM2.5 1.2B — QAD Q4_0", color = ScreenGold, fontWeight = FontWeight.SemiBold)
+                Text("Teacher-distilled quantization-aware checkpoint • about 696 MB • Hugging Face • free LFM Open License (terms apply). The model is downloaded to private app storage and SHA-256 verified before loading.", color = ScreenMuted, fontSize = 12.sp)
+                Text("Urdu is not listed among the model's official language tags, so the app must pass Urdu/Roman Urdu tests before we rely on it.", color = ScreenMuted, fontSize = 12.sp)
+                Button(
+                    enabled = !busy,
+                    onClick = {
+                        busy = true
+                        status = "Preparing local model download and verification…"
+                        scope.launch {
+                            try {
+                                val output = withContext(Dispatchers.IO) {
+                                    if (!manager.verifyInstalled()) {
+                                        manager.deleteModel()
+                                        manager.downloadModel { percent -> progress = percent }
+                                    }
+                                    check(NativeLlama.loadModel(manager.modelFile.absolutePath, 2048, 4)) {
+                                        "Native llama.cpp could not load this model on this device."
+                                    }
+                                    NativeLlama.generate(
+                                        "Reply in simple Roman Urdu. In one short paragraph, explain how you can help organize a truthful job search from a CV.",
+                                        120
+                                    )
+                                }
+                                loaded = true
+                                response = output
+                                status = "Model downloaded, checksum verified and local inference test completed."
+                            } catch (e: Exception) {
+                                status = "Local AI setup failed: ${e.message ?: e.javaClass.simpleName}"
+                            } catch (e: UnsatisfiedLinkError) {
+                                status = "Native inference library could not load: ${e.message}"
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (busy) "Preparing model…" else if (manager.isDownloaded()) "Verify and load local model" else "Download and test local model (696 MB)") }
+                if (busy && progress > 0) LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
+                Text(status, color = ScreenMuted, fontSize = 12.sp)
+                if (loaded) {
+                    OutlinedButton(onClick = {
+                        NativeLlama.unload()
+                        loaded = false
+                        status = "Model unloaded from memory. The verified file remains on this phone."
+                    }) { Text("Unload model from RAM") }
+                }
+                if (response.isNotBlank()) {
+                    Text("Local inference test", color = ScreenGold, fontWeight = FontWeight.SemiBold)
+                    Text(response, color = ScreenMuted, fontSize = 13.sp)
+                }
+                TextButton(onClick = {
+                    if (loaded) NativeLlama.unload()
+                    loaded = false
+                    val deleted = manager.deleteModel()
+                    status = if (deleted) "Model file deleted from app storage." else "Could not delete model file."
+                    response = ""
+                }, enabled = !busy) { Text("Delete downloaded model") }
             }
         }
         Text("Profile storage: ${if (LocalProfileStore(LocalContext.current).load() == null) "not configured" else "encrypted profile available"}", color = ScreenMuted, fontSize = 12.sp)
