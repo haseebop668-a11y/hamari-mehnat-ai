@@ -59,7 +59,8 @@ class EncryptedDocumentVault(context: Context) {
         val decrypted = decrypt(file.readBytes())
         val separator = decrypted.indexOf('\n'.code.toByte())
         require(separator >= 0) { "Vault metadata is corrupt" }
-        val second = decrypted.indexOf('\n'.code.toByte(), separator + 1)
+        val second = (separator + 1 until decrypted.size)
+            .firstOrNull { decrypted[it] == '\n'.code.toByte() } ?: -1
         require(second >= 0) { "Vault metadata is corrupt" }
         val name = String(decrypted.copyOfRange(0, separator), Charsets.UTF_8)
         val mime = String(decrypted.copyOfRange(separator + 1, second), Charsets.UTF_8)
