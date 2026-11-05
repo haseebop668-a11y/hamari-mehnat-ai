@@ -34,6 +34,8 @@ import com.hamari.mehenat.jobhunter.data.InterviewStore
 import com.hamari.mehenat.jobhunter.data.InterviewRecord
 import com.hamari.mehenat.jobhunter.data.InterviewReminderScheduler
 import com.hamari.mehenat.jobhunter.data.OfficialVisaSources
+import com.hamari.mehenat.jobhunter.data.OfficialVisaResearchClient
+import com.hamari.mehenat.jobhunter.data.VisaResearchResult
 import com.hamari.mehenat.jobhunter.domain.JobListing
 import com.hamari.mehenat.jobhunter.domain.JobMatcher
 import com.hamari.mehenat.jobhunter.domain.JobProfile
@@ -59,6 +61,10 @@ fun JobsScreen(context: Context) {
     var leverSites by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<JobListing>>(emptyList()) }
     var status by remember { mutableStateOf("Search permitted public job feeds. Results include the original source link.") }
+    var visaCountry by remember { mutableStateOf("Australia") }
+    var visaResults by remember { mutableStateOf<List<VisaResearchResult>>(emptyList()) }
+    var visaLoading by remember { mutableStateOf(false) }
+    var visaStatus by remember { mutableStateOf("Official visa research fetches current public government pages and records retrieval time.") }
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
@@ -140,6 +146,60 @@ fun JobsScreen(context: Context) {
                             status = if (saved) "Vacancy saved to your local tracker." else "This vacancy is already saved."
                         }) { Text("Save job") }
                     }
+                }
+            }
+        }
+        Divider(color = Color(0xFF303945))
+        Text("OFFICIAL VISA RESEARCH", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        OutlinedTextField(value = visaCountry, onValueChange = { visaCountry = it }, label = { Text("Country") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        Button(
+            enabled = !visaLoading,
+            onClick = {
+                if (visaCountry.isBlank()) {
+                    visaStatus = "Enter a country name."
+                } else {
+                    visaLoading = true
+                    visaStatus = "Fetching official government pages…"
+                    scope.launch {
+                        val selected = OfficialVisaSources.sources.filter { it.country.equals(visaCountry.trim(), true) }
+                        val fetched = withContext(Dispatchers.IO) {
+                            selected.map { OfficialVisaResearchClient().fetch(it) }
+                        }
+                        visaResults = fetched
+                        val evidence = fetched.filter { it.error == null && it.text.isNotBlank() }.joinToString("\\n\\n") {
+                            "SOURCE: ${it.source.country} — ${it.source.title}\\nURL: ${it.source.url}\\nRetrieved: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it.retrievedAtEpochMs))}\\nEXCERPT: ${it.text}"
+                        }
+                        if (evidence.isNotBlank()) {
+                            val profile = LocalProfileStore(context).load() ?: org.json.JSONObject()
+                            profile.put("official_visa_evidence", evidence.take(40000))
+                            LocalProfileStore(context).save(profile.toString())
+                        }
+                        visaStatus = if (fetched.isEmpty()) {
+                            "No official sources are registered for this country yet."
+                        } else {
+                            "Fetched ${fetched.count { it.error == null }} of ${fetched.size} registered official pages. Evidence is stored locally."
+                        }
+                        visaLoading = false
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (visaLoading) "Fetching…" else "Fetch current official guidance") }
+        Text(visaStatus, color = ScreenMuted, fontSize = 11.sp)
+        visaResults.forEach { item ->
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ScreenPanel)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(item.source.title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Text(
+                        if (item.error == null) "HTTP ${item.statusCode} • Retrieved ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(item.retrievedAtEpochMs))}"
+                        else "Could not fetch: ${item.error}",
+                        color = if (item.error == null) ScreenGold else ScreenMuted,
+                        fontSize = 10.sp
+                    )
+                    if (item.text.isNotBlank()) Text(item.text.take(1000), color = ScreenMuted, fontSize = 11.sp)
+                    TextButton(onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(item.source.url)))
+                    }) { Text("Open source") }
                 }
             }
         }
