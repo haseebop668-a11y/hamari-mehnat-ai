@@ -131,7 +131,8 @@ class JobSourceClient(
                     sourceUrl = applicationLink,
                     sourceName = "Himalayas",
                     retrievedAtEpochMs = System.currentTimeMillis(),
-                    sourcePageUrl = "https://himalayas.app"
+                    sourcePageUrl = "https://himalayas.app",
+                    expiresAtEpochMs = expiry.takeIf { it > 0L && it != Long.MAX_VALUE }
                 )
             }
             SourceResult("Himalayas", found.distinctBy { it.id })
