@@ -3,6 +3,9 @@ package com.hamari.mehenat.jobhunter
 import android.os.Bundle
 import android.content.Context
 import com.hamari.mehenat.jobhunter.data.AutoJobSearchScheduler
+import com.hamari.mehenat.jobhunter.data.LocalProfileStore
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
@@ -91,7 +94,7 @@ private fun JobHunterApp(appContext: Context) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             when (selectedTab) {
-                0 -> HomeScreen()
+                0 -> HomeScreen(appContext)
                 1 -> JobsScreen(appContext)
                 2 -> FilesScreen(appContext)
                 3 -> TrackerScreen(appContext)
@@ -102,7 +105,16 @@ private fun JobHunterApp(appContext: Context) {
 }
 
 @Composable
-private fun HomeScreen() {
+private fun HomeScreen(context: Context) {
+    val storedProfile = remember { LocalProfileStore(context).load() ?: JSONObject() }
+    var fullName by remember { mutableStateOf(storedProfile.optString("full_name")) }
+    var email by remember { mutableStateOf(storedProfile.optString("email")) }
+    var phone by remember { mutableStateOf(storedProfile.optString("phone")) }
+    var roles by remember { mutableStateOf(storedProfile.optJSONArray("target_roles").asCsv()) }
+    var countries by remember { mutableStateOf(storedProfile.optJSONArray("target_countries").asCsv()) }
+    var skills by remember { mutableStateOf(storedProfile.optJSONArray("skills").asCsv()) }
+    var experience by remember { mutableStateOf(storedProfile.optString("experience_summary")) }
+    var profileMessage by remember { mutableStateOf(if (storedProfile.length() == 0) "Complete your private profile to enable matching and scheduled search." else "Encrypted personal profile loaded.") }
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Your next opportunity.", fontSize = 27.sp, fontWeight = FontWeight.SemiBold, color = SoftWhite)
@@ -138,6 +150,32 @@ private fun HomeScreen() {
         StatusRow("Encrypted document vault", "Integration pending", false)
         StatusRow("Job search and matching engine", "Migration pending", false)
         StatusRow("Interview and visa intelligence", "Planned", false)
+        Text("PERSONAL PROFILE", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        OutlinedTextField(value = fullName, onValueChange = { fullName = it }, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("Phone") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = roles, onValueChange = { roles = it }, label = { Text("Target roles (comma separated)") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = countries, onValueChange = { countries = it }, label = { Text("Target countries (comma separated)") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = skills, onValueChange = { skills = it }, label = { Text("Skills (comma separated)") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = experience, onValueChange = { experience = it }, label = { Text("Experience summary") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+        Button(onClick = {
+            try {
+                val split = { value: String -> JSONArray(value.split(",").map { it.trim() }.filter { it.isNotBlank() }.distinct()) }
+                val profile = JSONObject()
+                    .put("full_name", fullName.trim())
+                    .put("email", email.trim())
+                    .put("phone", phone.trim())
+                    .put("target_roles", split(roles))
+                    .put("target_countries", split(countries))
+                    .put("skills", split(skills))
+                    .put("experience_summary", experience.trim())
+                LocalProfileStore(context).save(profile.toString())
+                profileMessage = "Profile saved encrypted on this device. Scheduled job refresh uses your target roles and countries."
+            } catch (e: Exception) {
+                profileMessage = "Could not save profile: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }, modifier = Modifier.fillMaxWidth()) { Text("Save encrypted profile") }
+        Text(profileMessage, color = Gold, fontSize = 12.sp)
         Text(
             "Privacy first: personal documents stay on your device. Online job search runs only when a connection is available.",
             color = Muted, fontSize = 12.sp, lineHeight = 18.sp
@@ -192,3 +230,7 @@ private fun FeatureScreen(title: String, description: String) {
         )
     }
 }
+
+
+private fun JSONArray?.asCsv(): String =
+    if (this == null) "" else (0 until length()).joinToString(", ") { optString(it) }
