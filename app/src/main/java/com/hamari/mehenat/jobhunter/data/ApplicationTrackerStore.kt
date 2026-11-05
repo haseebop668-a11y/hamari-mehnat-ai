@@ -11,11 +11,12 @@ data class TrackedApplication(
     val title: String,
     val company: String,
     val url: String,
-    val stage: String
+    val stage: String,
+    val notes: String
 )
 
 class ApplicationTrackerStore(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "personal_job_tracker.db", null, 2) {
+    SQLiteOpenHelper(context.applicationContext, "personal_job_tracker.db", null, 3) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -26,13 +27,15 @@ class ApplicationTrackerStore(context: Context) :
                 source_url TEXT NOT NULL,
                 stage TEXT NOT NULL DEFAULT 'Saved',
                 created_at INTEGER NOT NULL,
-                expires_at INTEGER
+                expires_at INTEGER,
+                notes TEXT NOT NULL DEFAULT ''
             )""".trimIndent()
         )
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) db.execSQL("ALTER TABLE applications ADD COLUMN expires_at INTEGER")
+        if (oldVersion < 3) db.execSQL("ALTER TABLE applications ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
     }
 
     fun save(job: JobListing): Boolean {
@@ -56,7 +59,7 @@ class ApplicationTrackerStore(context: Context) :
         val result = mutableListOf<TrackedApplication>()
         readableDatabase.query(
             "applications",
-            arrayOf("id", "title", "company", "source_url", "stage"),
+            arrayOf("id", "title", "company", "source_url", "stage", "notes"),
             null, null, null, null, "created_at DESC"
         ).use { cursor ->
             while (cursor.moveToNext()) {
@@ -65,7 +68,8 @@ class ApplicationTrackerStore(context: Context) :
                     title = cursor.getString(1),
                     company = cursor.getString(2),
                     url = cursor.getString(3),
-                    stage = cursor.getString(4)
+                    stage = cursor.getString(4),
+                    notes = cursor.getString(5)
                 )
             }
         }
@@ -78,10 +82,15 @@ class ApplicationTrackerStore(context: Context) :
         return writableDatabase.update("applications", values, "id = ?", arrayOf(id)) > 0
     }
 
+    fun updateNotes(id: String, notes: String): Boolean {
+        val values = ContentValues().apply { put("notes", notes.take(4000)) }
+        return writableDatabase.update("applications", values, "id = ?", arrayOf(id)) > 0
+    }
+
     fun delete(id: String): Boolean =
         writableDatabase.delete("applications", "id = ?", arrayOf(id)) > 0
 
     companion object {
-        private val ALLOWED_STAGES = setOf("Saved", "Applied", "Interview", "Offer", "Rejected")
+        private val ALLOWED_STAGES = setOf("Saved", "Contacted", "Awaiting response", "Applied", "Interview", "Offer", "Rejected")
     }
 }
