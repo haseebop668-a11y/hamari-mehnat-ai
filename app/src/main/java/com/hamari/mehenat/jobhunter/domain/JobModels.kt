@@ -12,7 +12,8 @@ data class JobListing(
     val sourceName: String,
     val retrievedAtEpochMs: Long,
     val sourcePageUrl: String? = null,
-    val expiresAtEpochMs: Long? = null
+    val expiresAtEpochMs: Long? = null,
+    val verificationUrl: String? = null
 )
 
 data class JobProfile(
