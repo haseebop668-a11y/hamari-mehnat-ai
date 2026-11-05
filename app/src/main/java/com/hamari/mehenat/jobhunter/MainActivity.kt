@@ -1,6 +1,7 @@
 package com.hamari.mehenat.jobhunter
 
 import android.os.Bundle
+import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
@@ -39,7 +40,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = Gold, onPrimary = Ink, background = Ink,
                 onBackground = SoftWhite, surface = Panel, onSurface = SoftWhite
-            )) { JobHunterApp() }
+            )) { JobHunterApp(applicationContext) }
         }
     }
 }
@@ -55,7 +56,7 @@ private val destinations = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun JobHunterApp() {
+private fun JobHunterApp(appContext: Context) {
     var selectedTab by remember { mutableIntStateOf(0) }
     Scaffold(
         containerColor = Ink,
@@ -89,10 +90,10 @@ private fun JobHunterApp() {
         ) {
             when (selectedTab) {
                 0 -> HomeScreen()
-                1 -> FeatureScreen("Job discovery", "Permitted job-source connectors, country filters and matching are being integrated.")
-                2 -> FeatureScreen("Private document vault", "CV, certificates and identity documents will be stored in app-private encrypted storage. Never upload personal documents to GitHub.")
-                3 -> FeatureScreen("Application tracker", "Saved vacancies, application stages, employer contacts and interview reminders will be stored locally.")
-                4 -> FeatureScreen("On-device AI", "The local model runtime is being integrated. Your CV and prompts will not be sent to a cloud AI provider.")
+                1 -> JobsScreen(appContext)
+                2 -> FilesScreen(appContext)
+                3 -> TrackerScreen(appContext)
+                4 -> LocalAiScreen()
             }
         }
     }
