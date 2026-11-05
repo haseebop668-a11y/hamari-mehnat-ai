@@ -36,7 +36,7 @@ class JobSourceClientTest {
             """{"data":[{"title":"Heavy Diesel Mechanic","company_name":"Example Mining","location":"Perth, Australia","description":"Hydraulics maintenance","url":"https://jobs.example/123","tags":["mechanic"],"created_at":"2026-11-05"}]}"""
         ))
         val result = client.searchArbeitnow("diesel mechanic", listOf("Australia"), 1)
-        assertNull(result.error)
+        assertNull("Unexpected source error: ${result.error}", result.error)
         assertEquals(1, result.jobs.size)
         assertEquals("Heavy Diesel Mechanic", result.jobs.first().title)
         assertEquals("https://jobs.example/123", result.jobs.first().sourceUrl)
