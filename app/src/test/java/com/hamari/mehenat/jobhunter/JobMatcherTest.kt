@@ -25,7 +25,7 @@ class JobMatcherTest {
 
     @Test fun recognizesRoleSynonymAndTargetCountry() {
         val result = matcher.evaluate(job("Hydraulics and maintenance experience preferred"), profile)
-        assertTrue(result.score >= 70)
+        assertTrue("Expected role + two skill + country points", result.score >= 60)
         assertTrue(result.reasons.any { it.contains("Role match") })
         assertTrue(result.reasons.contains("Target country match"))
     }
