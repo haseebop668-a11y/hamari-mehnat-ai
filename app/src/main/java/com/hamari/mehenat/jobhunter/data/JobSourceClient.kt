@@ -21,6 +21,7 @@ class JobSourceClient(
     private val greenhouseBaseUrl: String = "https://boards-api.greenhouse.io/v1/boards",
     private val leverBaseUrl: String = "https://api.lever.co/v0/postings",
     private val himalayasBaseUrl: String = "https://himalayas.app/jobs/api/search",
+    private val himalayasVerificationBaseUrl: String = "https://himalayas.app/jobs/api/companies",
     private val jobicyBaseUrl: String = "https://jobicy.com/api/v2/remote-jobs"
 ) {
     fun searchArbeitnow(query: String, countries: List<String>, maxPages: Int = 3): SourceResult {
@@ -115,10 +116,12 @@ class JobSourceClient(
                 }
                 if (!worldwide && country == null) return@mapNotNull null
                 val expiry = item.optLong("expiryDate", Long.MAX_VALUE)
-                if (expiry > 0L && expiry <= System.currentTimeMillis()) return@mapNotNull null
+                if (expiry > 0L && expiry != Long.MAX_VALUE && expiry <= System.currentTimeMillis() / 1000L) return@mapNotNull null
                 val applicationLink = item.optString("applicationLink")
                 if (!applicationLink.startsWith("https://") || !matches(query, "$title $description")) return@mapNotNull null
                 val guid = item.optString("guid").ifBlank { applicationLink }
+                val companySlug = item.optString("companySlug")
+                val safeSlug = companySlug.matches(Regex("[A-Za-z0-9_-]{1,100}")) && guid.matches(Regex("[A-Za-z0-9_-]{1,180}"))
                 val categories = item.optJSONArray("categories")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
                 JobListing(
                     id = stableId("Himalayas", guid),
@@ -131,13 +134,32 @@ class JobSourceClient(
                     sourceUrl = applicationLink,
                     sourceName = "Himalayas",
                     retrievedAtEpochMs = System.currentTimeMillis(),
-                    sourcePageUrl = "https://himalayas.app",
-                    expiresAtEpochMs = expiry.takeIf { it > 0L && it != Long.MAX_VALUE }
+                    sourcePageUrl = if (safeSlug) "https://himalayas.app/companies/$companySlug/jobs/$guid" else "https://himalayas.app",
+                    expiresAtEpochMs = expiry.takeIf { it > 0L && it != Long.MAX_VALUE }?.times(1000L),
+                    verificationUrl = if (safeSlug) "$himalayasVerificationBaseUrl/$companySlug/jobs/$guid" else null
                 )
             }
             SourceResult("Himalayas", found.distinctBy { it.id })
         } catch (e: Exception) {
             SourceResult("Himalayas", emptyList(), e.javaClass.simpleName)
+        }
+    }
+
+    fun isHimalayasJobOpen(verificationUrl: String): Boolean {
+        val uri = java.net.URI(verificationUrl)
+        require(uri.scheme == "https" && uri.host == "himalayas.app" &&
+            uri.path.startsWith("/jobs/api/companies/")) { "Invalid Himalayas verification URL." }
+        val request = Request.Builder()
+            .url(verificationUrl)
+            .header("User-Agent", "HamariMehnatPersonalAndroid/1.0")
+            .get()
+            .build()
+        http.newCall(request).execute().use { response ->
+            return when (response.code) {
+                200 -> true
+                404, 410 -> false
+                else -> throw IllegalStateException("Himalayas verification returned HTTP ${response.code}")
+            }
         }
     }
 
