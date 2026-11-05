@@ -31,6 +31,9 @@ jobs:
         run: git -C vendor/llama.cpp rev-parse HEAD
       - name: Assemble ARM64 debug APK and run unit tests
         run: gradle --no-daemon assembleDebug testDebugUnitTest
+      - name: Live public API and model endpoint smoke checks
+        run: python scripts/live_api_smoke.py
+        continue-on-error: true
       - uses: actions/upload-artifact@v4
         with:
           name: hamari-mehnat-debug-apk
