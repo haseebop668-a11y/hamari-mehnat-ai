@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import com.hamari.mehenat.jobhunter.data.EncryptedDocumentVault
 import com.hamari.mehenat.jobhunter.data.DocumentTextExtractor
 import com.hamari.mehenat.jobhunter.data.JobDiscoveryRepository
+import com.hamari.mehenat.jobhunter.data.JobSourceClient
 import com.hamari.mehenat.jobhunter.data.LocalProfileStore
 import com.hamari.mehenat.jobhunter.data.LocalModelManager
 import com.hamari.mehenat.jobhunter.ai.NativeLlama
@@ -68,6 +69,7 @@ fun JobsScreen(context: Context) {
     var visaLoading by remember { mutableStateOf(false) }
     var visaStatus by remember { mutableStateOf("Official visa research fetches current public government pages and records retrieval time.") }
     var loading by remember { mutableStateOf(false) }
+    var verifyingJobId by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -156,11 +158,42 @@ fun JobsScreen(context: Context) {
                     if (match.reasons.isNotEmpty()) Text(match.reasons.joinToString(" • "), color = ScreenMuted, fontSize = 10.sp)
                     Text(job.description.take(380), color = ScreenMuted, fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = {
-                            try {
-                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(job.sourceUrl)))
-                            } catch (_: Exception) { status = "Could not open vacancy link." }
-                        }) { Text(if (job.sourceName == "Himalayas") "Open application" else "Open source") }
+                        OutlinedButton(
+                            enabled = verifyingJobId != job.id,
+                            onClick = {
+                                if (job.sourceName == "Himalayas") {
+                                    val verificationUrl = job.verificationUrl
+                                    if (verificationUrl.isNullOrBlank()) {
+                                        status = "This Himalayas listing has no safe verification URL; open its source page first."
+                                    } else {
+                                        verifyingJobId = job.id
+                                        status = "Checking whether this Himalayas vacancy is still open…"
+                                        scope.launch {
+                                            try {
+                                                val isOpen = withContext(Dispatchers.IO) {
+                                                    JobSourceClient().isHimalayasJobOpen(verificationUrl)
+                                                }
+                                                if (isOpen) {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(job.sourceUrl)))
+                                                    status = "Vacancy verified open. The original applicationLink was opened."
+                                                } else {
+                                                    results = results.filterNot { it.id == job.id }
+                                                    status = "This Himalayas vacancy has closed and was removed from the current results."
+                                                }
+                                            } catch (e: Exception) {
+                                                status = "Could not verify vacancy status: ${e.message ?: e.javaClass.simpleName}. Open the Himalayas source to check manually."
+                                            } finally {
+                                                verifyingJobId = null
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    try {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(job.sourceUrl)))
+                                    } catch (_: Exception) { status = "Could not open vacancy link." }
+                                }
+                            }
+                        ) { Text(if (job.sourceName == "Himalayas") "Verify & apply" else "Open source") }
                         if (!job.sourcePageUrl.isNullOrBlank()) {
                             OutlinedButton(onClick = {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(job.sourcePageUrl)))
