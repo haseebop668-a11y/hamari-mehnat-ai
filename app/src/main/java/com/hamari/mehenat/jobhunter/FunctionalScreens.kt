@@ -115,7 +115,7 @@ fun FilesScreen(context: Context) {
                     if (cursor.moveToFirst()) cursor.getString(0) else null
                 } ?: "Imported document"
                 val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                val document = EncryptedDocumentVault(context).import(uri, name, mime)
+                val document = EncryptedDocumentVault(context).importDocument(uri, name, mime)
                 documentIds = EncryptedDocumentVault(context).listIds()
                 message = "Encrypted and imported: ${document.originalName} (${document.sizeBytes} bytes)."
             } catch (e: Exception) {
