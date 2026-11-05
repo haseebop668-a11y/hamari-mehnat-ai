@@ -2,6 +2,7 @@ package com.hamari.mehenat.jobhunter
 
 import android.os.Bundle
 import android.content.Context
+import com.hamari.mehenat.jobhunter.data.AutoJobSearchScheduler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
@@ -36,6 +37,7 @@ private val SoftWhite = Color(0xFFF1F3F5)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AutoJobSearchScheduler.schedule(this)
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = Gold, onPrimary = Ink, background = Ink,
