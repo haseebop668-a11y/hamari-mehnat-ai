@@ -52,6 +52,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    implementation("org.jsoup:jsoup:1.18.3")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
