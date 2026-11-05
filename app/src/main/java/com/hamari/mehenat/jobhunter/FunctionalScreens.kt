@@ -12,6 +12,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -322,6 +324,7 @@ fun FilesScreen(context: Context) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TrackerScreen(context: Context) {
     var entries by remember { mutableStateOf(ApplicationTrackerStore(context).all()) }
@@ -360,7 +363,7 @@ fun TrackerScreen(context: Context) {
                         ApplicationTrackerStore(context).updateNotes(item.id, notes)
                         entries = ApplicationTrackerStore(context).all()
                     }) { Text("Save notes") }
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         listOf("Saved", "Contacted", "Awaiting response", "Applied", "Interview", "Offer", "Rejected").forEach { stage ->
                             TextButton(onClick = {
                                 ApplicationTrackerStore(context).setStage(item.id, stage)
