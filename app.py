@@ -259,6 +259,10 @@ with tabs[3]:
                 if st.button("Update status", key=f"status_save_{job.get('job_id')}"):
                     if db is not None:
                         db.applications.update_one({"job_id": job["job_id"]}, {"$set": {"job": job, "status": status, "updated_at": datetime.now(timezone.utc)}}, upsert=True)
+                    else:
+                        statuses = st.session_state.get("application_statuses", {})
+                        statuses[job["job_id"]] = status
+                        st.session_state.application_statuses = statuses
                     st.success("Status updated.")
     else:
         st.info("No saved jobs yet. Search and save vacancies first.")
