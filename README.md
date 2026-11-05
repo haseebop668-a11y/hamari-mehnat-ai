@@ -1,34 +1,87 @@
 # Hamari Mehnat — Personal AI Job Hunter (Android-only V1)
 
-This branch begins the migration from the earlier Streamlit proof-of-concept to a **single-user Android application**.
+A private, single-owner Android application for international job discovery and application preparation.
 
-## Product scope
-- Android app only: no website, web dashboard, public registration, multi-user SaaS or payments.
-- Private personal job-search workspace.
-- Local-first data and on-device AI; internet is used for online job discovery and current external information.
-- No automatic applications or employer messages without explicit owner approval.
+## Product boundary
 
-## Current build slice
-- Native Kotlin + Jetpack Compose application shell.
-- Five navigation destinations: Home, Jobs, Files, Tracker and Local AI.
-- Dark, low-distraction interface.
-- Android CI workflow for debug APK assembly and unit tests.
-- Architecture and local-model evaluation plans.
+- Android application only. No website, web dashboard, public registration, multi-user SaaS, subscription or cloud AI.
+- Personal profile, CV text and imported documents stay in app-private storage. Profile and document content are encrypted with Android Keystore AES-GCM.
+- Local AI runs through the pinned llama.cpp native runtime. The GGUF model is downloaded separately by the user and SHA-256 verified before it can be loaded.
+- Internet is used only for public job feeds, official government source research, and the initial model download. Local documents, cached profile, saved jobs, tracker, reminders and an installed local model remain available offline.
+- Applications and employer messages are never submitted automatically. The user reviews and confirms every draft/action.
 
-Screens label modules that are not implemented yet. This initial slice is not a complete job-hunting agent. A debug APK will be available only after the Android CI workflow builds successfully.
+## Implemented modules
 
-## Local AI direction
-First benchmark candidate: Qwen3.5-2B Instruct, GGUF Q4_K_M, through llama.cpp Android JNI/NDK. Model download will be optional, checksum-verified and stored in app-private storage. If the model exceeds the target phone's memory or thermal budget, a smaller candidate will be tested. No cloud AI key is required.
+- **Profile:** encrypted owner profile with target roles, countries, skills and experience summary.
+- **Document vault:** PDF, DOCX, TXT and image import into app-private AES-GCM encrypted files. PDF/DOCX/TXT text extraction is local. Scanned-PDF/image OCR is not enabled.
+- **Job discovery:** Arbeitnow, Remotive, Himalayas, Jobicy, Greenhouse public company boards and Lever public company boards. LinkedIn, Indeed, SEEK and EURES are browser hand-off links; login-protected pages are not scraped.
+- **Source compliance:** rate limits for public APIs, direct source/application URLs, source attribution, expiry filtering for Himalayas listings and no onward job-feed redistribution.
+- **Matching:** deterministic role/skill/country relevance scoring with cautious sponsorship wording. A sponsorship signal is not a guarantee of sponsorship or visa eligibility.
+- **Local specialist agents:** CV analyst, job-match analyst, CV tailoring, cover-letter drafting, employer outreach drafting, interview coaching and official-source visa explanation. These are prompt-specialized workflows using one local model; the app does not claim to train a foundation model from personal documents.
+- **Employer outreach:** browser-based employer research and user-reviewed email drafts opened in the user's email app. The app does not send automatically or read the user's inbox.
+- **Tracker:** saved jobs, application stages, employer contact/response notes and local interview history.
+- **Interview reminders:** local notification scheduled one hour before the interview in the entered time zone.
+- **Visa/work-permit research:** fetches bounded excerpts from registered official government pages, records retrieval timestamps and stores the evidence locally for the visa specialist agent.
+- **Scheduled discovery:** WorkManager runs every 12 hours only while network connectivity is available, rotates configured target roles and stores matching vacancies locally.
+
+## Job source notes
+
+- Remotive listings are delayed by 24 hours; the app caps its public API use at four requests per UTC day and enforces a six-hour interval.
+- Himalayas job data is refreshed daily; the app limits requests to one per UTC day, retains source attribution and uses the API-provided applicationLink for the application action.
+- Jobicy public API use is limited to four requests per day with at least one hour between calls.
+- Greenhouse and Lever endpoints are company-board-specific. Enter board IDs/site names in the Jobs tab; they are not global job-search APIs.
+- LinkedIn, Indeed and SEEK do not provide an unrestricted public API for all logged-in listings. The app opens their official search pages in a browser rather than bypassing access controls.
+
+## Local AI model
+
+Primary benchmark candidate:
+- LiquidAI LFM2.5-1.2B-Instruct QAD Q4_0 GGUF.
+- About 696 MB (695,755,488 bytes).
+- QAD means quantization-aware distillation; it is the teacher-distilled checkpoint requested.
+- Hugging Face revision is pinned; the app verifies exact byte size and SHA-256 before loading.
+- LFM Open License v1.0 applies. Review its terms before redistributing the model; the app downloads the artifact directly to the user's private device storage.
+- The model's published language list does not include Urdu. English, Urdu and Roman Urdu must be benchmarked on the target phone; quality is not assumed.
+- The model is not bundled into the APK and no user documents are used to fine-tune its weights.
+
+Runtime: upstream llama.cpp pinned as a Git submodule at vendor/llama.cpp, built for Android ARM64 with NDK/CMake.
 
 ## Build
-Open the project root in Android Studio with JDK 17, Android SDK 35 and Gradle 8.10.2, then run:
 
-```bash
-gradle assembleDebug testDebugUnitTest
-```
+Requirements:
+- JDK 17
+- Android SDK Platform 35
+- Android NDK 27.0.12077973
+- CMake 3.31.6
+- Gradle 8.10.2
+
+Build and test:
+
+~~~bash
+gradle --no-daemon assembleDebug assembleRelease testDebugUnitTest
+~~~
+
+The debug APK is installable and is the CI artifact. The release variant is built to verify R8/minification and JNI keep rules; it is not signed with a user-owned release key.
+
+## CI verification
+
+GitHub Actions:
+- Checks out the pinned llama.cpp submodule.
+- Builds debug and minified release variants.
+- Runs Kotlin unit tests for matching, agent prompt safety, public job API adapters and official visa page extraction.
+- Runs live public endpoint smoke checks for job APIs and the pinned Hugging Face model metadata endpoint. The model binary is not downloaded in CI.
+- Uploads the debug APK as a workflow artifact.
+
+A successful CI build does not replace a real-device test of model download, RAM, speed, battery, thermal behaviour, notification permission and Urdu/Roman Urdu output.
+
+## Privacy and security
+
+- Never commit CVs, passports, certificates, personal profile data, model weights or credentials.
+- No API keys are required for the included public feeds.
+- No analytics SDK or cloud AI provider is included.
+- Android backup is disabled and cleartext HTTP is disabled.
+- Personal documents are encrypted at rest in app-private storage.
+- The repository currently contains application source only. Change repository visibility to Private before adding any private project materials or secrets.
 
 ## Existing prototype
-The root Python modules (`app.py`, `job_sources.py`, `matching.py`) are retained temporarily as migration reference. They are not the Android application runtime. Useful logic will be ported and covered by Kotlin tests before retirement.
 
-## Privacy
-Never commit CVs, passports, certificates, private profile data, model files or API credentials. Keep the repository private before adding any personal material. Personal documents belong in app-private encrypted storage, not GitHub.
+The original Python/Streamlit files are retained temporarily as migration reference only. They are not the Android app runtime and no web application is part of V1.
