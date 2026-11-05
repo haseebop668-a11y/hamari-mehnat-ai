@@ -38,6 +38,8 @@ private val ScreenPanel = Color(0xFF191F27)
 fun JobsScreen(context: Context) {
     var query by remember { mutableStateOf("mechanic") }
     var countries by remember { mutableStateOf("Australia, United Kingdom, Germany") }
+    var greenhouseBoards by remember { mutableStateOf("") }
+    var leverSites by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<JobListing>>(emptyList()) }
     var status by remember { mutableStateOf("Search permitted public job feeds. Results include the original source link.") }
     var loading by remember { mutableStateOf(false) }
@@ -48,6 +50,8 @@ fun JobsScreen(context: Context) {
         Text("Public feeds only. No LinkedIn/Indeed login scraping or access-control bypass.", color = ScreenMuted, fontSize = 12.sp)
         OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Role / keywords") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(value = countries, onValueChange = { countries = it }, label = { Text("Target countries (comma separated)") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = greenhouseBoards, onValueChange = { greenhouseBoards = it }, label = { Text("Optional Greenhouse company board IDs") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(value = leverSites, onValueChange = { leverSites = it }, label = { Text("Optional Lever company site names") }, modifier = Modifier.fillMaxWidth())
         Button(
             onClick = {
                 if (query.isBlank() || countries.isBlank()) {
@@ -61,7 +65,9 @@ fun JobsScreen(context: Context) {
                             val api = JobSourceClient()
                             listOf(
                                 api.searchArbeitnow(query, countryList),
-                                api.searchRemotive(query, countryList)
+                                api.searchRemotive(query, countryList),
+                                api.searchGreenhouse(query, countryList, greenhouseBoards.split(",").map { it.trim() }.filter { it.isNotBlank() }),
+                                api.searchLever(query, countryList, leverSites.split(",").map { it.trim() }.filter { it.isNotBlank() })
                             )
                         }
                         results = sourceResults.flatMap { it.jobs }.distinctBy { it.id }
