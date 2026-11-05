@@ -22,7 +22,10 @@ class AutoJobSearchWorker(context: Context, params: WorkerParameters) : Worker(c
             val skills = profile.optJSONArray("skills").toStringList()
             if (roles.isEmpty() || countries.isEmpty()) return Result.success()
 
-            val query = roles.joinToString(" ")
+            val prefs = applicationContext.getSharedPreferences("job_search_worker", Context.MODE_PRIVATE)
+            val cursor = prefs.getInt("role_cursor", 0).coerceAtLeast(0) % roles.size
+            val query = roles[cursor]
+            prefs.edit().putInt("role_cursor", (cursor + 1) % roles.size).apply()
             val sources = JobDiscoveryRepository(applicationContext).search(query, countries)
             if (sources.all { it.error != null }) return Result.retry()
 
