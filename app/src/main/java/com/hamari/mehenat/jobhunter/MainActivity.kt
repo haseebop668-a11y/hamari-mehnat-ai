@@ -4,6 +4,9 @@ import android.os.Bundle
 import android.content.Context
 import com.hamari.mehenat.jobhunter.data.AutoJobSearchScheduler
 import com.hamari.mehenat.jobhunter.data.LocalProfileStore
+import com.hamari.mehenat.jobhunter.data.EncryptedDocumentVault
+import com.hamari.mehenat.jobhunter.data.ApplicationTrackerStore
+import com.hamari.mehenat.jobhunter.data.LocalModelManager
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.activity.ComponentActivity
@@ -107,6 +110,9 @@ private fun JobHunterApp(appContext: Context) {
 @Composable
 private fun HomeScreen(context: Context) {
     val storedProfile = remember { LocalProfileStore(context).load() ?: JSONObject() }
+    val documentCount = remember { EncryptedDocumentVault(context).listIds().size }
+    val trackedJobs = remember { ApplicationTrackerStore(context).all() }
+    val downloadedModel = remember { LocalModelManager(context).isDownloaded() }
     var fullName by remember { mutableStateOf(storedProfile.optString("full_name")) }
     var email by remember { mutableStateOf(storedProfile.optString("email")) }
     var phone by remember { mutableStateOf(storedProfile.optString("phone")) }
@@ -137,19 +143,19 @@ private fun HomeScreen(context: Context) {
         }
         Text("WORKSPACE", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricCard("Profile", "Not set up", Modifier.weight(1f))
-            MetricCard("Documents", "0 imported", Modifier.weight(1f))
+            MetricCard("Profile", if (storedProfile.length() > 0) "Configured" else "Not set up", Modifier.weight(1f))
+            MetricCard("Documents", "$documentCount stored", Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricCard("Saved jobs", "0 saved", Modifier.weight(1f))
-            MetricCard("Applications", "0 tracked", Modifier.weight(1f))
+            MetricCard("Saved jobs", "${trackedJobs.size} saved", Modifier.weight(1f))
+            MetricCard("Applications", "${trackedJobs.count { it.stage != "Saved" }} active", Modifier.weight(1f))
         }
         Text("BUILD STATUS", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-        StatusRow("Android application shell", "Created", true)
-        StatusRow("Local AI model runtime", "Integration pending", false)
-        StatusRow("Encrypted document vault", "Integration pending", false)
-        StatusRow("Job search and matching engine", "Migration pending", false)
-        StatusRow("Interview and visa intelligence", "Planned", false)
+        StatusRow("Android application", "Native Kotlin and Jetpack Compose", true)
+        StatusRow("Local AI model runtime", if (downloadedModel) "Model file present; checksum checked on load" else "llama.cpp integrated; model not downloaded", true)
+        StatusRow("Encrypted document vault", "Android Keystore AES-GCM • PDF / DOCX / TXT extraction", true)
+        StatusRow("Job search and matching engine", "Public feeds • company boards • relevance and sponsorship signals", true)
+        StatusRow("Interview and visa intelligence", "Local reminders • official government page fetcher", true)
         Text("PERSONAL PROFILE", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         OutlinedTextField(value = fullName, onValueChange = { fullName = it }, label = { Text("Full name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
