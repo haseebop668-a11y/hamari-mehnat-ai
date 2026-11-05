@@ -13,6 +13,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 data class VaultDocument(val id: String, val originalName: String, val mimeType: String, val sizeBytes: Long)
+data class VaultDocumentContent(val document: VaultDocument, val bytes: ByteArray)
 
 class EncryptedDocumentVault(context: Context) {
     private val directory = File(context.filesDir, "private_vault").apply { mkdirs() }
@@ -43,7 +44,9 @@ class EncryptedDocumentVault(context: Context) {
         return VaultDocument(id, displayName, mimeType, raw.size.toLong())
     }
 
-    fun read(documentId: String): ByteArray {
+    fun read(documentId: String): ByteArray = readDocument(documentId).bytes
+
+    fun readDocument(documentId: String): VaultDocumentContent {
         require(documentId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid document identifier" }
         val file = File(directory, "$documentId.vault")
         require(file.isFile && file.length() <= MAX_DOCUMENT_BYTES + 4096) { "Document not found or invalid size" }
@@ -52,7 +55,13 @@ class EncryptedDocumentVault(context: Context) {
         require(separator >= 0) { "Vault metadata is corrupt" }
         val second = decrypted.indexOf('\n'.code.toByte(), separator + 1)
         require(second >= 0) { "Vault metadata is corrupt" }
-        return decrypted.copyOfRange(second + 1, decrypted.size)
+        val name = String(decrypted.copyOfRange(0, separator), Charsets.UTF_8)
+        val mime = String(decrypted.copyOfRange(separator + 1, second), Charsets.UTF_8)
+        val bytes = decrypted.copyOfRange(second + 1, decrypted.size)
+        return VaultDocumentContent(
+            VaultDocument(documentId, name, mime, bytes.size.toLong()),
+            bytes
+        )
     }
 
     fun listIds(): List<String> = directory.listFiles()
