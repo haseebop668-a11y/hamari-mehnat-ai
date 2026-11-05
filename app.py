@@ -48,7 +48,7 @@ def get_db(uri: str, db_name: str):
     if not uri:
         return None
     from pymongo import MongoClient
-    client = MongoClient(uri, serverSelectionTimeoutMS=4000, tls=True)
+    client = MongoClient(uri, serverSelectionTimeoutMS=4000)
     client.admin.command("ping")
     return client[db_name]
 
@@ -98,12 +98,12 @@ def save_profile(profile):
 def save_jobs(jobs):
     if db is not None and jobs:
         for job in jobs:
-            db.jobs.update_one({"job_id": job["job_id"]}, {"$set": {**job, "last_seen_at": datetime.now(timezone.utc)}}, upsert=True)
+            db.search_results.update_one({"job_id": job["job_id"]}, {"$set": {**job, "last_seen_at": datetime.now(timezone.utc)}}, upsert=True)
 
 def load_saved_jobs():
     if db is not None:
-        return list(db.jobs.find({}, {"_id": 0}).sort("match_score", -1).limit(500))
-    return st.session_state.get("jobs", [])
+        return list(db.saved_jobs.find({}, {"_id": 0}).sort("match_score", -1).limit(500))
+    return st.session_state.get("saved_jobs", [])
 
 profile = load_profile()
 
@@ -182,7 +182,7 @@ with tabs[1]:
         with st.expander("Extracted CV text preview"):
             st.text(profile["cv_text"][:8000])
             if st.button("AI-assisted CV profile extraction"):
-                extracted = extract_profile_from_cv(profile["cv_text"])
+                extracted = extract_profile_from_cv(profile["cv_text"], api_key=setting("GROQ_API_KEY"))
                 st.json(extracted)
 
 with tabs[2]:
@@ -222,7 +222,7 @@ with tabs[2]:
                 st.link_button("Open original vacancy", job["url"])
                 if st.button("Save / track this job", key=f"save_{job['job_id']}"):
                     if db is not None:
-                        db.jobs.update_one({"job_id": job["job_id"]}, {"$set": job}, upsert=True)
+                        db.saved_jobs.update_one({"job_id": job["job_id"]}, {"$set": job}, upsert=True)
                     else:
                         current = st.session_state.get("saved_jobs", [])
                         if not any(x["job_id"] == job["job_id"] for x in current):
