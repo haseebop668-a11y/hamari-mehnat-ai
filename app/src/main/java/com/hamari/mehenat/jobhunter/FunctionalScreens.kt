@@ -464,10 +464,12 @@ fun LocalAiScreen(context: Context) {
                                 if (!android.util.Patterns.EMAIL_ADDRESS.matcher(employerEmail).matches()) {
                                     status = "Enter a verified employer email address before opening an email draft."
                                 } else {
-                                    val mailto = Uri.parse(
-                                        "mailto:${Uri.encode(employerEmail)}?subject=${Uri.encode("Job enquiry")}&body=${Uri.encode(agentOutput)}"
-                                    )
-                                    context.startActivity(Intent(Intent.ACTION_SENDTO, mailto))
+                                    val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                        data = Uri.fromParts("mailto", employerEmail.trim(), null)
+                                        putExtra(Intent.EXTRA_SUBJECT, "Job enquiry")
+                                        putExtra(Intent.EXTRA_TEXT, agentOutput)
+                                    }
+                                    context.startActivity(intent)
                                 }
                             }) { Text("Open email draft") }
                         }
