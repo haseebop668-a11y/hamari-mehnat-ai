@@ -18,7 +18,9 @@ class JobSourceClient(
     private val arbeitnowBaseUrl: String = "https://www.arbeitnow.com/api/job-board-api",
     private val remotiveBaseUrl: String = "https://remotive.com/api/remote-jobs",
     private val greenhouseBaseUrl: String = "https://boards-api.greenhouse.io/v1/boards",
-    private val leverBaseUrl: String = "https://api.lever.co/v0/postings"
+    private val leverBaseUrl: String = "https://api.lever.co/v0/postings",
+    private val himalayasBaseUrl: String = "https://himalayas.app/jobs/api/search",
+    private val jobicyBaseUrl: String = "https://jobicy.com/api/v2/remote-jobs"
 ) {
     fun searchArbeitnow(query: String, countries: List<String>, maxPages: Int = 3): SourceResult {
         val found = mutableListOf<JobListing>()
@@ -80,6 +82,97 @@ class JobSourceClient(
             SourceResult("Remotive", jobs)
         } catch (e: Exception) {
             SourceResult("Remotive", emptyList(), e.javaClass.simpleName)
+        }
+    }
+
+    fun searchHimalayas(query: String, countries: List<String>): SourceResult {
+        return try {
+            val encoded = java.net.URLEncoder.encode(query, Charsets.UTF_8.name())
+            val json = getJson("$himalayasBaseUrl?q=$encoded&page=1")
+            val jobs = json.optJSONArray("jobs") ?: org.json.JSONArray()
+            val found = (0 until jobs.length()).mapNotNull { i ->
+                val item = jobs.optJSONObject(i) ?: return@mapNotNull null
+                val title = item.optString("title")
+                val description = item.optString("description").ifBlank { item.optString("excerpt") }
+                val locations = item.optJSONArray("locationRestrictions") ?: org.json.JSONArray()
+                val locationNames = (0 until locations.length()).mapNotNull { index ->
+                    locations.optJSONObject(index)?.optString("name")?.takeIf { it.isNotBlank() }
+                }
+                val worldwide = locations.length() == 0
+                val country = countries.firstOrNull { selected ->
+                    val code = when (selected.lowercase()) {
+                        "australia" -> "AU"
+                        "united kingdom", "uk" -> "GB"
+                        "germany" -> "DE"
+                        "canada" -> "CA"
+                        "new zealand" -> "NZ"
+                        "united states", "usa" -> "US"
+                        else -> ""
+                    }
+                    locationNames.any { it.equals(selected, true) || it.contains(selected, true) } ||
+                        (code.isNotBlank() && (0 until locations.length()).any { locations.optJSONObject(it)?.optString("alpha2") == code })
+                }
+                if (!worldwide && country == null) return@mapNotNull null
+                val expiry = item.optLong("expiryDate", Long.MAX_VALUE)
+                if (expiry > 0L && expiry <= System.currentTimeMillis()) return@mapNotNull null
+                val applicationLink = item.optString("applicationLink")
+                if (!applicationLink.startsWith("https://") || !matches(query, "$title $description")) return@mapNotNull null
+                val guid = item.optString("guid").ifBlank { applicationLink }
+                val categories = item.optJSONArray("categories")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
+                JobListing(
+                    id = stableId("Himalayas", guid),
+                    title = title,
+                    company = item.optString("companyName"),
+                    location = locationNames.joinToString(", ").ifBlank { "Worldwide remote" },
+                    country = country ?: "Remote",
+                    description = stripHtml(description).take(12000),
+                    tags = categories,
+                    sourceUrl = applicationLink,
+                    sourceName = "Himalayas",
+                    retrievedAtEpochMs = System.currentTimeMillis(),
+                    sourcePageUrl = "https://himalayas.app"
+                )
+            }
+            SourceResult("Himalayas", found.distinctBy { it.id })
+        } catch (e: Exception) {
+            SourceResult("Himalayas", emptyList(), e.javaClass.simpleName)
+        }
+    }
+
+    fun searchJobicy(query: String, countries: List<String>, count: Int = 100): SourceResult {
+        return try {
+            val encoded = java.net.URLEncoder.encode(query, Charsets.UTF_8.name())
+            val json = getJson("$jobicyBaseUrl?count=${count.coerceIn(1, 100)}&tag=$encoded")
+            val jobs = json.optJSONArray("jobs") ?: org.json.JSONArray()
+            val found = (0 until jobs.length()).mapNotNull { i ->
+                val item = jobs.optJSONObject(i) ?: return@mapNotNull null
+                val title = item.optString("jobTitle")
+                val company = item.optString("companyName")
+                val description = item.optString("jobDescription").ifBlank { item.optString("jobExcerpt") }
+                val location = item.optString("jobGeo", "Anywhere")
+                val worldwide = location.contains("anywhere", true) || location.contains("worldwide", true)
+                val country = countryFromLocation(location, countries)
+                if (!worldwide && country == null) return@mapNotNull null
+                val url = item.optString("url")
+                if (!url.startsWith("https://") || !matches(query, "$title $description")) return@mapNotNull null
+                val tags = item.optJSONArray("jobIndustry")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
+                val id = item.optString("id").ifBlank { url }
+                JobListing(
+                    id = stableId("Jobicy", id),
+                    title = title,
+                    company = company,
+                    location = location,
+                    country = country ?: "Remote",
+                    description = stripHtml(description).take(12000),
+                    tags = tags,
+                    sourceUrl = url,
+                    sourceName = "Jobicy",
+                    retrievedAtEpochMs = System.currentTimeMillis()
+                )
+            }
+            SourceResult("Jobicy", found.distinctBy { it.id })
+        } catch (e: Exception) {
+            SourceResult("Jobicy", emptyList(), e.javaClass.simpleName)
         }
     }
 
