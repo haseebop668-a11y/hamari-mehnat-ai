@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hamari.mehenat.jobhunter.data.EncryptedDocumentVault
 import com.hamari.mehenat.jobhunter.data.DocumentTextExtractor
-import com.hamari.mehenat.jobhunter.data.JobSourceClient
 import com.hamari.mehenat.jobhunter.data.JobDiscoveryRepository
 import com.hamari.mehenat.jobhunter.data.LocalProfileStore
 import com.hamari.mehenat.jobhunter.data.LocalModelManager
@@ -500,7 +499,15 @@ fun LocalAiScreen(context: Context) {
                                     }
                                 }.toString()
                                 val cvText = profile?.optString("cv_text").orEmpty()
-                                val evidence = listOf(cvText, agentEvidence).filter { it.isNotBlank() }.joinToString("\\n\\n").take(5000)
+                                val officialVisaEvidence = profile?.optString("official_visa_evidence").orEmpty()
+                                val selectedEvidence = if (selectedAgent == PersonalAgent.VISA_EVIDENCE) {
+                                    listOf(officialVisaEvidence, agentEvidence)
+                                } else {
+                                    listOf(cvText, agentEvidence)
+                                }
+                                val evidence = selectedEvidence.filter { it.isNotBlank() }
+                                    .joinToString("\\n\\n")
+                                    .take(5000)
                                 val output = withContext(Dispatchers.IO) {
                                     LocalAgentOrchestrator().execute(
                                         selectedAgent,
