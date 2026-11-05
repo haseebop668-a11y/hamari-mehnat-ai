@@ -139,7 +139,12 @@ fun JobsScreen(context: Context) {
                             try {
                                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(job.sourceUrl)))
                             } catch (_: Exception) { status = "Could not open vacancy link." }
-                        }) { Text("Open source") }
+                        }) { Text(if (job.sourceName == "Himalayas") "Open application" else "Open source") }
+                        if (!job.sourcePageUrl.isNullOrBlank()) {
+                            OutlinedButton(onClick = {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(job.sourcePageUrl)))
+                            }) { Text("Himalayas source") }
+                        }
                         Button(onClick = {
                             val saved = ApplicationTrackerStore(context).save(job)
                             status = if (saved) "Vacancy saved to your local tracker." else "This vacancy is already saved."
