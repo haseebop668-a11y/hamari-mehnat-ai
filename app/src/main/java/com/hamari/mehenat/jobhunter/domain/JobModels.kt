@@ -10,7 +10,8 @@ data class JobListing(
     val tags: List<String> = emptyList(),
     val sourceUrl: String,
     val sourceName: String,
-    val retrievedAtEpochMs: Long
+    val retrievedAtEpochMs: Long,
+    val sourcePageUrl: String? = null
 )
 
 data class JobProfile(
