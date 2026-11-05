@@ -20,7 +20,9 @@ class JobSourceClientTest {
         server.start()
         client = JobSourceClient(
             http = OkHttpClient(),
-            arbeitnowBaseUrl = server.url("/jobs").toString().trimEnd('/')
+            arbeitnowBaseUrl = server.url("/jobs").toString().trimEnd('/'),
+            greenhouseBaseUrl = server.url("/greenhouse").toString().trimEnd('/'),
+            leverBaseUrl = server.url("/lever").toString().trimEnd('/')
         )
     }
 
