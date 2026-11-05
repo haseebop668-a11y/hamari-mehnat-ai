@@ -1,6 +1,8 @@
 package com.hamari.mehenat.jobhunter
 
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.Manifest
 import android.os.Build
 import android.content.Intent
@@ -306,6 +308,7 @@ fun LocalAiScreen(context: Context) {
     var loaded by remember { mutableStateOf(false) }
     var agentTask by remember { mutableStateOf("Review my profile and suggest the strongest honest next step for my job search.") }
     var agentEvidence by remember { mutableStateOf("") }
+    var employerEmail by remember { mutableStateOf("") }
     var agentOutput by remember { mutableStateOf("") }
     var selectedAgent by remember { mutableStateOf(PersonalAgent.CV_ANALYST) }
     var agentMenuOpen by remember { mutableStateOf(false) }
@@ -395,6 +398,15 @@ fun LocalAiScreen(context: Context) {
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3
                 )
+                if (selectedAgent == PersonalAgent.EMPLOYER_OUTREACH) {
+                    OutlinedTextField(
+                        value = employerEmail,
+                        onValueChange = { employerEmail = it },
+                        label = { Text("Employer email (only if verified)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
                 Button(
                     enabled = loaded && !busy && agentTask.isNotBlank(),
                     onClick = {
@@ -433,6 +445,33 @@ fun LocalAiScreen(context: Context) {
                 if (agentOutput.isNotBlank()) {
                     Text("Agent output", color = ScreenGold, fontWeight = FontWeight.SemiBold)
                     Text(agentOutput, color = ScreenMuted, fontSize = 13.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Job Hunter AI draft", agentOutput))
+                            status = "Draft copied. Review it before using."
+                        }) { Text("Copy") }
+                        OutlinedButton(onClick = {
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, agentOutput)
+                                putExtra(Intent.EXTRA_SUBJECT, "Personal job-search draft")
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Share draft"))
+                        }) { Text("Share") }
+                        if (selectedAgent == PersonalAgent.EMPLOYER_OUTREACH) {
+                            Button(onClick = {
+                                if (!android.util.Patterns.EMAIL_ADDRESS.matcher(employerEmail).matches()) {
+                                    status = "Enter a verified employer email address before opening an email draft."
+                                } else {
+                                    val mailto = Uri.parse(
+                                        "mailto:${Uri.encode(employerEmail)}?subject=${Uri.encode("Job enquiry")}&body=${Uri.encode(agentOutput)}"
+                                    )
+                                    context.startActivity(Intent(Intent.ACTION_SENDTO, mailto))
+                                }
+                            }) { Text("Open email draft") }
+                        }
+                    }
                 }
                 TextButton(onClick = {
                     if (loaded) NativeLlama.unload()
