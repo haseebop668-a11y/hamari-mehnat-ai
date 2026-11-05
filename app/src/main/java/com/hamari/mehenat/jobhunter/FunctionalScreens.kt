@@ -107,6 +107,25 @@ fun JobsScreen(context: Context) {
             modifier = Modifier.fillMaxWidth()
         ) { Text(if (loading) "Searching…" else "Search jobs") }
         Text(status, color = ScreenMuted, fontSize = 12.sp)
+        Text("ADDITIONAL JOB BOARDS", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text("These open the original job board in your browser. The app does not scrape login-protected pages.", color = ScreenMuted, fontSize = 11.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(onClick = {
+                val url = "https://www.linkedin.com/jobs/search/?keywords=${Uri.encode(query)}&location=${Uri.encode(countries)}"
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }) { Text("LinkedIn") }
+            OutlinedButton(onClick = {
+                val url = "https://www.indeed.com/jobs?q=${Uri.encode(query)}&l=${Uri.encode(countries)}"
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }) { Text("Indeed") }
+            OutlinedButton(onClick = {
+                val url = "https://www.seek.com.au/jobs?keywords=${Uri.encode(query)}"
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            }) { Text("SEEK") }
+            OutlinedButton(onClick = {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://eures.europa.eu/job-search_en")))
+            }) { Text("EURES") }
+        }
         val savedProfile = remember(results) { LocalProfileStore(context).load() }
         val targetRoles = savedProfile?.optJSONArray("target_roles").asStringList()
         val targetCountries = savedProfile?.optJSONArray("target_countries").asStringList()
