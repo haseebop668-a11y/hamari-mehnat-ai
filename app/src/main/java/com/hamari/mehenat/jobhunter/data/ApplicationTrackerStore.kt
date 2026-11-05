@@ -15,7 +15,7 @@ data class TrackedApplication(
 )
 
 class ApplicationTrackerStore(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "personal_job_tracker.db", null, 1) {
+    SQLiteOpenHelper(context.applicationContext, "personal_job_tracker.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
