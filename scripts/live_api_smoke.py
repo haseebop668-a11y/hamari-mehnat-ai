@@ -38,8 +38,8 @@ def check_model_metadata() -> None:
         if response.status != 200:
             raise RuntimeError(f"Hugging Face model endpoint: HTTP {response.status}")
         size = response.headers.get("Content-Length")
-        if size and int(size) < 600_000_000:
-            raise RuntimeError(f"Model endpoint reports an unexpectedly small file: {size} bytes")
+        if size and int(size) != 695_755_488:
+            raise RuntimeError(f"Model endpoint size mismatch: expected 695755488, received {size}")
         print(f"PASS Hugging Face model endpoint: HTTP 200, Content-Length={size or 'not supplied'}")
 
 
