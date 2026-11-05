@@ -402,13 +402,20 @@ fun LocalAiScreen(context: Context) {
                         status = "Running ${selectedAgent.displayName} locally…"
                         scope.launch {
                             try {
-                                val profileJson = LocalProfileStore(context).load()?.toString().orEmpty()
+                                val profile = LocalProfileStore(context).load()
+                                val profileFacts = org.json.JSONObject().apply {
+                                    listOf("full_name", "email", "phone", "target_roles", "target_countries", "skills", "experience_summary").forEach { key ->
+                                        if (profile?.has(key) == true) put(key, profile.opt(key))
+                                    }
+                                }.toString()
+                                val cvText = profile?.optString("cv_text").orEmpty()
+                                val evidence = listOf(cvText, agentEvidence).filter { it.isNotBlank() }.joinToString("\\n\\n").take(5000)
                                 val output = withContext(Dispatchers.IO) {
                                     LocalAgentOrchestrator().execute(
                                         selectedAgent,
                                         agentTask,
-                                        profileJson.take(5000),
-                                        agentEvidence.take(5000),
+                                        profileFacts.take(3000),
+                                        evidence,
                                         320
                                     )
                                 }
