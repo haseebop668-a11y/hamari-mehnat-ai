@@ -348,8 +348,20 @@ fun TrackerScreen(context: Context) {
                     Text(item.title, fontWeight = FontWeight.SemiBold)
                     Text(item.company, color = ScreenGold, fontSize = 12.sp)
                     Text(item.stage, color = ScreenMuted, fontSize = 12.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("Saved", "Applied", "Interview", "Offer", "Rejected").forEach { stage ->
+                    var notes by remember(item.id) { mutableStateOf(item.notes) }
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("Employer contact / response notes") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2
+                    )
+                    TextButton(onClick = {
+                        ApplicationTrackerStore(context).updateNotes(item.id, notes)
+                        entries = ApplicationTrackerStore(context).all()
+                    }) { Text("Save notes") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        listOf("Saved", "Contacted", "Awaiting response", "Applied", "Interview", "Offer", "Rejected").forEach { stage ->
                             TextButton(onClick = {
                                 ApplicationTrackerStore(context).setStage(item.id, stage)
                                 entries = ApplicationTrackerStore(context).all()
