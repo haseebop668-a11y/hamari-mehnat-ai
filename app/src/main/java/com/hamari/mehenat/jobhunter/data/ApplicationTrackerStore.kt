@@ -25,13 +25,14 @@ class ApplicationTrackerStore(context: Context) :
                 company TEXT NOT NULL,
                 source_url TEXT NOT NULL,
                 stage TEXT NOT NULL DEFAULT 'Saved',
-                created_at INTEGER NOT NULL
+                created_at INTEGER NOT NULL,
+                expires_at INTEGER
             )""".trimIndent()
         )
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Schema migrations are added with version increments; never drop user tracking data.
+        if (oldVersion < 2) db.execSQL("ALTER TABLE applications ADD COLUMN expires_at INTEGER")
     }
 
     fun save(job: JobListing): Boolean {
@@ -42,6 +43,7 @@ class ApplicationTrackerStore(context: Context) :
             put("source_url", job.sourceUrl.take(2048))
             put("stage", "Saved")
             put("created_at", System.currentTimeMillis())
+            if (job.expiresAtEpochMs != null) put("expires_at", job.expiresAtEpochMs)
         }
         return writableDatabase.insertWithOnConflict(
             "applications", null, values, SQLiteDatabase.CONFLICT_IGNORE
@@ -49,6 +51,8 @@ class ApplicationTrackerStore(context: Context) :
     }
 
     fun all(): List<TrackedApplication> {
+        val now = System.currentTimeMillis()
+        writableDatabase.delete("applications", "expires_at IS NOT NULL AND expires_at <= ?", arrayOf(now.toString()))
         val result = mutableListOf<TrackedApplication>()
         readableDatabase.query(
             "applications",
