@@ -65,7 +65,7 @@ class JobSourceClient(
                 val item = data.optJSONObject(i) ?: return@mapNotNull null
                 val title = item.optString("title")
                 val location = item.optString("candidate_required_location", "Worldwide")
-                val country = countries.firstOrNull { location.contains(it, true) }
+                val country = countryFromLocation(location, countries)
                 val remoteWorldwide = location.contains("worldwide", true) || location.equals("anywhere", true)
                 val url = item.optString("url")
                 if ((!remoteWorldwide && country == null) || !url.startsWith("http")) return@mapNotNull null
