@@ -102,11 +102,11 @@ fun JobsScreen(context: Context) {
             modifier = Modifier.fillMaxWidth()
         ) { Text(if (loading) "Searching…" else "Search jobs") }
         Text(status, color = ScreenMuted, fontSize = 12.sp)
+        val savedProfile = remember(results) { LocalProfileStore(context).load() }
+        val targetRoles = savedProfile?.optJSONArray("target_roles").asStringList()
+        val targetCountries = savedProfile?.optJSONArray("target_countries").asStringList()
+        val skills = savedProfile?.optJSONArray("skills").asStringList()
         results.forEach { job ->
-            val savedProfile = LocalProfileStore(context).load()
-            val targetRoles = savedProfile?.optJSONArray("target_roles").asStringList()
-            val targetCountries = savedProfile?.optJSONArray("target_countries").asStringList()
-            val skills = savedProfile?.optJSONArray("skills").asStringList()
             val match = JobMatcher().evaluate(
                 job,
                 JobProfile(targetRoles = targetRoles, targetCountries = targetCountries, skills = skills)
