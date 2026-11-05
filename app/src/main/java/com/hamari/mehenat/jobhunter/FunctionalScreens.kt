@@ -22,6 +22,8 @@ import com.hamari.mehenat.jobhunter.data.JobSourceClient
 import com.hamari.mehenat.jobhunter.data.LocalProfileStore
 import com.hamari.mehenat.jobhunter.data.LocalModelManager
 import com.hamari.mehenat.jobhunter.ai.NativeLlama
+import com.hamari.mehenat.jobhunter.ai.LocalAgentOrchestrator
+import com.hamari.mehenat.jobhunter.ai.PersonalAgent
 import com.hamari.mehenat.jobhunter.data.ApplicationTrackerStore
 import com.hamari.mehenat.jobhunter.domain.JobListing
 import kotlinx.coroutines.Dispatchers
@@ -183,6 +185,11 @@ fun LocalAiScreen(context: Context) {
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableIntStateOf(0) }
     var loaded by remember { mutableStateOf(false) }
+    var agentTask by remember { mutableStateOf("Review my profile and suggest the strongest honest next step for my job search.") }
+    var agentEvidence by remember { mutableStateOf("") }
+    var agentOutput by remember { mutableStateOf("") }
+    var selectedAgent by remember { mutableStateOf(PersonalAgent.CV_ANALYST) }
+    var agentMenuOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val manager = remember(context) { LocalModelManager(context) }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -205,7 +212,7 @@ fun LocalAiScreen(context: Context) {
                                         manager.deleteModel()
                                         manager.downloadModel { percent -> progress = percent }
                                     }
-                                    check(NativeLlama.loadModel(manager.modelFile.absolutePath, 2048, 4)) {
+                                    check(NativeLlama.loadModel(manager.modelFile.absolutePath, 4096, 4)) {
                                         "Native llama.cpp could not load this model on this device."
                                     }
                                     NativeLlama.generate(
@@ -239,6 +246,67 @@ fun LocalAiScreen(context: Context) {
                 if (response.isNotBlank()) {
                     Text("Local inference test", color = ScreenGold, fontWeight = FontWeight.SemiBold)
                     Text(response, color = ScreenMuted, fontSize = 13.sp)
+                }
+                Divider(color = Color(0xFF303945))
+                Text("LOCAL SPECIALIST AGENTS", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                Box {
+                    OutlinedButton(onClick = { agentMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(selectedAgent.displayName)
+                    }
+                    DropdownMenu(expanded = agentMenuOpen, onDismissRequest = { agentMenuOpen = false }) {
+                        PersonalAgent.values().forEach { agent ->
+                            DropdownMenuItem(
+                                text = { Text(agent.displayName) },
+                                onClick = { selectedAgent = agent; agentMenuOpen = false }
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = agentTask,
+                    onValueChange = { agentTask = it },
+                    label = { Text("What should this agent do?") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2
+                )
+                OutlinedTextField(
+                    value = agentEvidence,
+                    onValueChange = { agentEvidence = it },
+                    label = { Text("Vacancy / official-source evidence (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3
+                )
+                Button(
+                    enabled = loaded && !busy && agentTask.isNotBlank(),
+                    onClick = {
+                        busy = true
+                        status = "Running ${selectedAgent.displayName} locally…"
+                        scope.launch {
+                            try {
+                                val profileJson = LocalProfileStore(context).load()?.toString().orEmpty()
+                                val output = withContext(Dispatchers.IO) {
+                                    LocalAgentOrchestrator().execute(
+                                        selectedAgent,
+                                        agentTask,
+                                        profileJson.take(5000),
+                                        agentEvidence.take(5000),
+                                        320
+                                    )
+                                }
+                                agentOutput = output
+                                status = "Agent completed on-device. Review every generated statement before use."
+                            } catch (e: Exception) {
+                                status = "Agent failed: ${e.message ?: e.javaClass.simpleName}"
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (busy) "Working locally…" else "Run selected agent") }
+                if (agentOutput.isNotBlank()) {
+                    Text("Agent output", color = ScreenGold, fontWeight = FontWeight.SemiBold)
+                    Text(agentOutput, color = ScreenMuted, fontSize = 13.sp)
                 }
                 TextButton(onClick = {
                     if (loaded) NativeLlama.unload()
