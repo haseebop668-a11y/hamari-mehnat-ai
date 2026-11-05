@@ -30,6 +30,7 @@ import com.hamari.mehenat.jobhunter.data.ApplicationTrackerStore
 import com.hamari.mehenat.jobhunter.data.InterviewStore
 import com.hamari.mehenat.jobhunter.data.InterviewRecord
 import com.hamari.mehenat.jobhunter.data.InterviewReminderScheduler
+import com.hamari.mehenat.jobhunter.data.OfficialVisaSources
 import com.hamari.mehenat.jobhunter.domain.JobListing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -117,6 +118,22 @@ fun JobsScreen(context: Context) {
                             status = if (saved) "Vacancy saved to your local tracker." else "This vacancy is already saved."
                         }) { Text("Save job") }
                     }
+                }
+            }
+        }
+        Divider(color = Color(0xFF303945))
+        Text("OFFICIAL VISA & SPONSORSHIP SOURCES", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text("Government sources only • links last checked 5 Nov 2026. Always open the current source; this app does not decide visa eligibility.", color = ScreenMuted, fontSize = 11.sp)
+        OfficialVisaSources.sources.forEach { source ->
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ScreenPanel)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text("${source.country} — ${source.title}", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Text(source.purpose, color = ScreenMuted, fontSize = 11.sp)
+                    TextButton(onClick = {
+                        try {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(source.url)))
+                        } catch (_: Exception) { status = "Could not open official government source." }
+                    }) { Text("Open official source") }
                 }
             }
         }
