@@ -35,6 +35,10 @@ import com.hamari.mehenat.jobhunter.data.InterviewRecord
 import com.hamari.mehenat.jobhunter.data.InterviewReminderScheduler
 import com.hamari.mehenat.jobhunter.data.OfficialVisaSources
 import com.hamari.mehenat.jobhunter.domain.JobListing
+import com.hamari.mehenat.jobhunter.domain.JobMatcher
+import com.hamari.mehenat.jobhunter.domain.JobProfile
+import com.hamari.mehenat.jobhunter.domain.SponsorshipSignal
+import org.json.JSONArray
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -99,6 +103,19 @@ fun JobsScreen(context: Context) {
         ) { Text(if (loading) "Searching…" else "Search jobs") }
         Text(status, color = ScreenMuted, fontSize = 12.sp)
         results.forEach { job ->
+            val savedProfile = LocalProfileStore(context).load()
+            val targetRoles = savedProfile?.optJSONArray("target_roles").asStringList()
+            val targetCountries = savedProfile?.optJSONArray("target_countries").asStringList()
+            val skills = savedProfile?.optJSONArray("skills").asStringList()
+            val match = JobMatcher().evaluate(
+                job,
+                JobProfile(targetRoles = targetRoles, targetCountries = targetCountries, skills = skills)
+            )
+            val sponsorshipLabel = when (match.sponsorship) {
+                SponsorshipSignal.POSSIBLE_SIGNAL_REQUIRES_VERIFICATION -> "Possible sponsorship signal — verify"
+                SponsorshipSignal.EXPLICITLY_UNAVAILABLE_OR_RIGHT_TO_WORK_REQUIRED -> "May require existing work rights"
+                SponsorshipSignal.NOT_MENTIONED -> "Sponsorship not mentioned"
+            }
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -109,6 +126,8 @@ fun JobsScreen(context: Context) {
                     Text(job.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
                     Text(job.company, color = ScreenGold, fontSize = 13.sp)
                     Text("${job.location} • ${job.sourceName}", color = ScreenMuted, fontSize = 11.sp)
+                    Text("Relevance: ${match.score}/100 • $sponsorshipLabel", color = ScreenGold, fontSize = 11.sp)
+                    if (match.reasons.isNotEmpty()) Text(match.reasons.joinToString(" • "), color = ScreenMuted, fontSize = 10.sp)
                     Text(job.description.take(380), color = ScreenMuted, fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = {
@@ -487,3 +506,7 @@ fun LocalAiScreen(context: Context) {
         Text("Profile storage: ${if (LocalProfileStore(LocalContext.current).load() == null) "not configured" else "encrypted profile available"}", color = ScreenMuted, fontSize = 12.sp)
     }
 }
+
+
+private fun JSONArray?.asStringList(): List<String> =
+    if (this == null) emptyList() else (0 until length()).mapNotNull { optString(it).trim().takeIf(String::isNotBlank) }
