@@ -3,6 +3,7 @@ package com.hamari.mehenat.jobhunter.data
 import com.hamari.mehenat.jobhunter.domain.JobListing
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.ResponseBody
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -246,7 +247,7 @@ class JobSourceClient(
         val request = Request.Builder().url(url).header("User-Agent", "HamariMehnatPersonalAndroid/1.0").get().build()
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("HTTP ${response.code}")
-            return org.json.JSONArray(response.body?.string() ?: error("Empty response body"))
+            return org.json.JSONArray(readBodyLimited(response.body ?: error("Empty response body")))
         }
     }
 
@@ -254,7 +255,7 @@ class JobSourceClient(
         val request = Request.Builder().url(url).header("User-Agent", "HamariMehnatPersonalAndroid/1.0").get().build()
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("HTTP ${response.code}")
-            return JSONObject(response.body?.string() ?: error("Empty response body"))
+            return JSONObject(readBodyLimited(response.body ?: error("Empty response body")))
         }
     }
 
@@ -273,6 +274,22 @@ class JobSourceClient(
             val candidates = aliases[selected.lowercase()] ?: listOf(selected.lowercase())
             candidates.any { alias -> normalized.contains(alias) }
         }
+    }
+
+    private fun readBodyLimited(body: ResponseBody, maxBytes: Int = 8 * 1024 * 1024): String {
+        val output = java.io.ByteArrayOutputStream()
+        body.byteStream().use { input ->
+            val buffer = ByteArray(32 * 1024)
+            var total = 0
+            while (total < maxBytes) {
+                val count = input.read(buffer, 0, minOf(buffer.size, maxBytes - total))
+                if (count < 0) break
+                output.write(buffer, 0, count)
+                total += count
+            }
+            if (total == maxBytes && input.read() != -1) error("Job source response exceeded the 8 MB safety limit.")
+        }
+        return output.toString(Charsets.UTF_8.name())
     }
 
     private fun matches(query: String, haystack: String): Boolean =
