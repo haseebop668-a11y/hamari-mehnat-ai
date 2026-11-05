@@ -98,7 +98,7 @@ private fun JobHunterApp(appContext: Context) {
                 1 -> JobsScreen(appContext)
                 2 -> FilesScreen(appContext)
                 3 -> TrackerScreen(appContext)
-                4 -> LocalAiScreen()
+                4 -> LocalAiScreen(appContext)
             }
         }
     }
