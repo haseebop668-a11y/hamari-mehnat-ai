@@ -19,7 +19,7 @@ class EncryptedDocumentVault(context: Context) {
     private val resolver = context.contentResolver
     private val alias = "hamari_mehnat_vault_key"
 
-    fun import(uri: Uri, displayName: String, mimeType: String): VaultDocument {
+    fun importDocument(uri: Uri, displayName: String, mimeType: String): VaultDocument {
         require(displayName.isNotBlank()) { "Document name is required" }
         val raw = resolver.openInputStream(uri)?.use { input ->
             val output = java.io.ByteArrayOutputStream()
