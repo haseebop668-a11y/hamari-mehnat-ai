@@ -180,7 +180,7 @@ class JobSourceClient(
         if (boardTokens.isEmpty()) return SourceResult("Greenhouse", emptyList(), "No company board IDs configured")
         val found = mutableListOf<JobListing>()
         val errors = mutableListOf<String>()
-        boardTokens.map { it.trim() }.filter { it.matches(Regex("[A-Za-z0-9_-]{1,100}")) }.take(30).forEach { token ->
+        boardTokens.map { it.trim() }.filter { it.matches(Regex("[A-Za-z0-9_-]{1,100}")) }.take(10).forEach { token ->
             try {
                 val encoded = java.net.URLEncoder.encode(token, Charsets.UTF_8.name())
                 val json = getJson("$greenhouseBaseUrl/$encoded/jobs?content=true")
@@ -213,7 +213,7 @@ class JobSourceClient(
         if (siteNames.isEmpty()) return SourceResult("Lever", emptyList(), "No company site names configured")
         val found = mutableListOf<JobListing>()
         val errors = mutableListOf<String>()
-        siteNames.map { it.trim() }.filter { it.matches(Regex("[A-Za-z0-9_-]{1,100}")) }.take(30).forEach { site ->
+        siteNames.map { it.trim() }.filter { it.matches(Regex("[A-Za-z0-9_-]{1,100}")) }.take(10).forEach { site ->
             try {
                 val encoded = java.net.URLEncoder.encode(site, Charsets.UTF_8.name())
                 val jobs = getArray("$leverBaseUrl/$encoded?mode=json")
