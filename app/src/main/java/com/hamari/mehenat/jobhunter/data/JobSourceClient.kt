@@ -16,7 +16,9 @@ class JobSourceClient(
         .readTimeout(15, TimeUnit.SECONDS)
         .build(),
     private val arbeitnowBaseUrl: String = "https://www.arbeitnow.com/api/job-board-api",
-    private val remotiveBaseUrl: String = "https://remotive.com/api/remote-jobs"
+    private val remotiveBaseUrl: String = "https://remotive.com/api/remote-jobs",
+    private val greenhouseBaseUrl: String = "https://boards-api.greenhouse.io/v1/boards",
+    private val leverBaseUrl: String = "https://api.lever.co/v0/postings"
 ) {
     fun searchArbeitnow(query: String, countries: List<String>, maxPages: Int = 3): SourceResult {
         val found = mutableListOf<JobListing>()
@@ -78,6 +80,80 @@ class JobSourceClient(
             SourceResult("Remotive", jobs)
         } catch (e: Exception) {
             SourceResult("Remotive", emptyList(), e.javaClass.simpleName)
+        }
+    }
+
+    fun searchGreenhouse(query: String, countries: List<String>, boardTokens: List<String>): SourceResult {
+        if (boardTokens.isEmpty()) return SourceResult("Greenhouse", emptyList(), "No company board IDs configured")
+        val found = mutableListOf<JobListing>()
+        val errors = mutableListOf<String>()
+        boardTokens.map { it.trim() }.filter { it.matches(Regex("[A-Za-z0-9_-]{1,100}")) }.take(30).forEach { token ->
+            try {
+                val encoded = java.net.URLEncoder.encode(token, Charsets.UTF_8.name())
+                val json = getJson("$greenhouseBaseUrl/$encoded/jobs?content=true")
+                val jobs = json.optJSONArray("jobs") ?: org.json.JSONArray()
+                for (i in 0 until jobs.length()) {
+                    val item = jobs.optJSONObject(i) ?: continue
+                    val title = item.optString("title")
+                    val location = item.optJSONObject("location")?.optString("name").orEmpty()
+                    val country = countries.firstOrNull { location.contains(it, true) } ?: continue
+                    val description = item.optString("content")
+                    val url = item.optString("absolute_url")
+                    if (url.startsWith("https://") && matches(query, "$title $description")) {
+                        found += JobListing(
+                            id = stableId("Greenhouse", url), title = title,
+                            company = token, location = location, country = country,
+                            description = stripHtml(description).take(12000),
+                            sourceUrl = url, sourceName = "Greenhouse public board",
+                            retrievedAtEpochMs = System.currentTimeMillis()
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                errors += "$token: ${e.javaClass.simpleName}"
+            }
+        }
+        return SourceResult("Greenhouse", found.distinctBy { it.id }, errors.takeIf { it.isNotEmpty() }?.joinToString())
+    }
+
+    fun searchLever(query: String, countries: List<String>, siteNames: List<String>): SourceResult {
+        if (siteNames.isEmpty()) return SourceResult("Lever", emptyList(), "No company site names configured")
+        val found = mutableListOf<JobListing>()
+        val errors = mutableListOf<String>()
+        siteNames.map { it.trim() }.filter { it.matches(Regex("[A-Za-z0-9_-]{1,100}")) }.take(30).forEach { site ->
+            try {
+                val encoded = java.net.URLEncoder.encode(site, Charsets.UTF_8.name())
+                val jobs = getArray("$leverBaseUrl/$encoded?mode=json")
+                for (i in 0 until jobs.length()) {
+                    val item = jobs.optJSONObject(i) ?: continue
+                    val title = item.optString("text")
+                    val categories = item.optJSONObject("categories")
+                    val location = categories?.optString("location").orEmpty()
+                    val country = countries.firstOrNull { location.contains(it, true) } ?: continue
+                    val description = item.optString("descriptionPlain").ifBlank { item.optString("description") }
+                    val url = item.optString("hostedUrl").ifBlank { item.optString("applyUrl") }
+                    if (url.startsWith("https://") && matches(query, "$title $description")) {
+                        found += JobListing(
+                            id = stableId("Lever", url), title = title,
+                            company = site, location = location, country = country,
+                            description = stripHtml(description).take(12000),
+                            sourceUrl = url, sourceName = "Lever public board",
+                            retrievedAtEpochMs = System.currentTimeMillis()
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                errors += "$site: ${e.javaClass.simpleName}"
+            }
+        }
+        return SourceResult("Lever", found.distinctBy { it.id }, errors.takeIf { it.isNotEmpty() }?.joinToString())
+    }
+
+    private fun getArray(url: String): org.json.JSONArray {
+        val request = Request.Builder().url(url).header("User-Agent", "HamariMehnatPersonalAndroid/1.0").get().build()
+        http.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("HTTP ${response.code}")
+            return org.json.JSONArray(response.body?.string() ?: error("Empty response body"))
         }
     }
 
