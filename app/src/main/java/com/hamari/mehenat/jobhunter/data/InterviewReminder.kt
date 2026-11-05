@@ -17,7 +17,9 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
-import java.util.UUID
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 data class InterviewRecord(
@@ -128,8 +130,10 @@ class InterviewReminderWorker(context: Context, params: WorkerParameters) : Work
                 applicationContext, 0, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val timestamp = java.text.DateFormat.getDateTimeInstance().format(java.util.Date(scheduledAt))
-            val body = listOf(timestamp, timezone, location).filter { it.isNotBlank() }.joinToString(" • ")
+            val timestamp = Instant.ofEpochMilli(scheduledAt)
+                .atZone(ZoneId.of(timezone))
+                .format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy • HH:mm z"))
+            val body = listOf(timestamp, location).filter { it.isNotBlank() }.joinToString(" • ")
             val notification = NotificationCompat.Builder(applicationContext, channelId)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle("Interview: $role at $company")
