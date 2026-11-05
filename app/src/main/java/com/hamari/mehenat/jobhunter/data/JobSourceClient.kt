@@ -32,7 +32,7 @@ class JobSourceClient(
                     val item = data.optJSONObject(i) ?: continue
                     val title = item.optString("title")
                     val location = item.optString("location")
-                    val country = countries.firstOrNull { location.contains(it, true) }
+                    val country = countryFromLocation(location, countries)
                     val description = item.optString("description")
                     if (country != null && matches(query, "$title $description") && item.optString("url").startsWith("http")) {
                         found += JobListing(
@@ -96,7 +96,7 @@ class JobSourceClient(
                     val item = jobs.optJSONObject(i) ?: continue
                     val title = item.optString("title")
                     val location = item.optJSONObject("location")?.optString("name").orEmpty()
-                    val country = countries.firstOrNull { location.contains(it, true) } ?: continue
+                    val country = countryFromLocation(location, countries) ?: continue
                     val description = item.optString("content")
                     val url = item.optString("absolute_url")
                     if (url.startsWith("https://") && matches(query, "$title $description")) {
@@ -162,6 +162,23 @@ class JobSourceClient(
         http.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("HTTP ${response.code}")
             return JSONObject(response.body?.string() ?: error("Empty response body"))
+        }
+    }
+
+    private fun countryFromLocation(location: String, countries: List<String>): String? {
+        val aliases = mapOf(
+            "australia" to listOf("australia", "perth", "sydney", "brisbane", "melbourne", "queensland", "western australia", "new south wales", "victoria", "adelaide", "darwin"),
+            "united kingdom" to listOf("united kingdom", "uk", "england", "scotland", "wales", "london", "manchester", "birmingham", "glasgow", "edinburgh", "cardiff"),
+            "germany" to listOf("germany", "berlin", "munich", "münchen", "hamburg", "frankfurt", "cologne", "köln", "stuttgart"),
+            "canada" to listOf("canada", "toronto", "vancouver", "calgary", "edmonton", "ottawa", "montreal", "montréal"),
+            "new zealand" to listOf("new zealand", "auckland", "wellington", "christchurch", "hamilton"),
+            "uae" to listOf("uae", "united arab emirates", "dubai", "abu dhabi"),
+            "saudi arabia" to listOf("saudi arabia", "riyadh", "jeddah", "dammam")
+        )
+        val normalized = location.lowercase()
+        return countries.firstOrNull { selected ->
+            val candidates = aliases[selected.lowercase()] ?: listOf(selected.lowercase())
+            candidates.any { alias -> normalized.contains(alias) }
         }
     }
 
