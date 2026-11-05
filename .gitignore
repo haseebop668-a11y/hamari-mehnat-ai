@@ -1,0 +1,8 @@
+.env
+.streamlit/secrets.toml
+*.pdf
+*.docx
+*.doc
+*.key
+__pycache__/
+.venv/
