@@ -62,9 +62,9 @@ class DocumentTextExtractor(context: Context) {
         val output = StringBuilder()
         var event = parser.eventType
         while (event != XmlPullParser.END_DOCUMENT) {
-            if (event == XmlPullParser.START_TAG && parser.name == "t") {
+            if (event == XmlPullParser.START_TAG && parser.name.substringAfter(':') == "t") {
                 output.append(parser.nextText()).append(' ')
-            } else if (event == XmlPullParser.END_TAG && parser.name == "p") {
+            } else if (event == XmlPullParser.END_TAG && parser.name.substringAfter(':') == "p") {
                 output.append('\n')
             }
             event = parser.next()
