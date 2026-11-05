@@ -101,6 +101,8 @@ Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_generate(
     const std::string prompt(raw_prompt);
     env->ReleaseStringUTFChars(prompt_text, raw_prompt);
 
+    // Each request is an independent agent turn; never leak prior prompt/KV state into the next task.
+    llama_memory_clear(llama_get_memory(g_context), true);
     const std::string formatted = format_prompt(prompt);
     std::vector<llama_token> tokens(4096);
     int32_t token_count = llama_tokenize(
