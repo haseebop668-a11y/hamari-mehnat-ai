@@ -23,9 +23,7 @@ class AutoJobSearchWorker(context: Context, params: WorkerParameters) : Worker(c
             if (roles.isEmpty() || countries.isEmpty()) return Result.success()
 
             val query = roles.joinToString(" ")
-            val sources = JobSourceClient().let { api ->
-                listOf(api.searchArbeitnow(query, countries), api.searchRemotive(query, countries))
-            }
+            val sources = JobDiscoveryRepository(applicationContext).search(query, countries)
             if (sources.all { it.error != null }) return Result.retry()
 
             val matcher = JobMatcher()
