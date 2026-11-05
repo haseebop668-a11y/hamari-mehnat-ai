@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hamari.mehenat.jobhunter.data.EncryptedDocumentVault
+import com.hamari.mehenat.jobhunter.data.DocumentTextExtractor
 import com.hamari.mehenat.jobhunter.data.JobSourceClient
 import com.hamari.mehenat.jobhunter.data.LocalProfileStore
 import com.hamari.mehenat.jobhunter.data.LocalModelManager
@@ -144,18 +145,25 @@ fun JobsScreen(context: Context) {
 fun FilesScreen(context: Context) {
     var message by remember { mutableStateOf("Documents are encrypted with an Android Keystore AES-GCM key and kept in app-private storage.") }
     var documentIds by remember { mutableStateOf(EncryptedDocumentVault(context).listIds()) }
+    var cvPreview by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            try {
-                val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                    if (cursor.moveToFirst()) cursor.getString(0) else null
-                } ?: "Imported document"
-                val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                val document = EncryptedDocumentVault(context).importDocument(uri, name, mime)
-                documentIds = EncryptedDocumentVault(context).listIds()
-                message = "Encrypted and imported: ${document.originalName} (${document.sizeBytes} bytes)."
-            } catch (e: Exception) {
-                message = "Import failed: ${e.message ?: e.javaClass.simpleName}"
+            scope.launch {
+                message = "Importing and encrypting document…"
+                try {
+                    val document = withContext(Dispatchers.IO) {
+                        val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                            if (cursor.moveToFirst()) cursor.getString(0) else null
+                        } ?: "Imported document"
+                        val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                        EncryptedDocumentVault(context).importDocument(uri, name, mime)
+                    }
+                    documentIds = EncryptedDocumentVault(context).listIds()
+                    message = "Encrypted and imported: ${document.originalName} (${document.sizeBytes} bytes)."
+                } catch (e: Exception) {
+                    message = "Import failed: ${e.message ?: e.javaClass.simpleName}"
+                }
             }
         }
     }
@@ -170,15 +178,38 @@ fun FilesScreen(context: Context) {
         Text("Encrypted files: ${documentIds.size}", fontWeight = FontWeight.SemiBold)
         documentIds.forEach { id ->
             Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
-                Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text("Private document • ${id.take(8)}…", fontSize = 12.sp)
-                    TextButton(onClick = {
-                        val deleted = EncryptedDocumentVault(context).delete(id)
-                        documentIds = EncryptedDocumentVault(context).listIds()
-                        message = if (deleted) "Encrypted document deleted." else "Document was not found."
-                    }) { Text("Delete") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        TextButton(onClick = {
+                            scope.launch {
+                                try {
+                                    val extracted = withContext(Dispatchers.IO) {
+                                        val stored = EncryptedDocumentVault(context).readDocument(id)
+                                        DocumentTextExtractor(context).extract(stored.document.originalName, stored.bytes)
+                                    }
+                                    val profile = LocalProfileStore(context).load() ?: org.json.JSONObject()
+                                    profile.put("cv_text", extracted.text)
+                                    LocalProfileStore(context).save(profile.toString())
+                                    cvPreview = extracted.text.take(2200)
+                                    message = "Extracted ${extracted.text.length} characters from ${extracted.format} and saved the CV text encrypted in your profile."
+                                } catch (e: Exception) {
+                                    message = "Text extraction failed: ${e.message ?: e.javaClass.simpleName}"
+                                }
+                            }
+                        }) { Text("Extract CV text") }
+                        TextButton(onClick = {
+                            val deleted = EncryptedDocumentVault(context).delete(id)
+                            documentIds = EncryptedDocumentVault(context).listIds()
+                            message = if (deleted) "Encrypted document deleted." else "Document was not found."
+                        }) { Text("Delete") }
+                    }
                 }
             }
+        }
+        if (cvPreview.isNotBlank()) {
+            Text("CV text preview", color = ScreenGold, fontWeight = FontWeight.SemiBold)
+            Text(cvPreview, color = ScreenMuted, fontSize = 11.sp)
         }
     }
 }
