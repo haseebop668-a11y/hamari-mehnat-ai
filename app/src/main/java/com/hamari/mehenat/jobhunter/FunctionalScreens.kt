@@ -144,6 +144,10 @@ fun JobsScreen(context: Context) {
                             val saved = ApplicationTrackerStore(context).save(job)
                             status = if (saved) "Vacancy saved to your local tracker." else "This vacancy is already saved."
                         }) { Text("Save job") }
+                        OutlinedButton(onClick = {
+                            val query = Uri.encode("${job.company} official website careers contact")
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$query")))
+                        }) { Text("Research employer") }
                     }
                 }
             }
