@@ -1,6 +1,8 @@
 package com.hamari.mehenat.jobhunter
 
 import android.content.Context
+import android.Manifest
+import android.os.Build
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -25,10 +27,17 @@ import com.hamari.mehenat.jobhunter.ai.NativeLlama
 import com.hamari.mehenat.jobhunter.ai.LocalAgentOrchestrator
 import com.hamari.mehenat.jobhunter.ai.PersonalAgent
 import com.hamari.mehenat.jobhunter.data.ApplicationTrackerStore
+import com.hamari.mehenat.jobhunter.data.InterviewStore
+import com.hamari.mehenat.jobhunter.data.InterviewRecord
+import com.hamari.mehenat.jobhunter.data.InterviewReminderScheduler
 import com.hamari.mehenat.jobhunter.domain.JobListing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.UUID
 
 private val ScreenGold = Color(0xFFD6B36A)
 private val ScreenMuted = Color(0xFF9AA4B2)
@@ -160,6 +169,19 @@ fun FilesScreen(context: Context) {
 @Composable
 fun TrackerScreen(context: Context) {
     var entries by remember { mutableStateOf(ApplicationTrackerStore(context).all()) }
+    var interviews by remember { mutableStateOf(InterviewStore(context).all()) }
+    var company by remember { mutableStateOf("") }
+    var role by remember { mutableStateOf("") }
+    var dateTime by remember {
+        mutableStateOf(LocalDateTime.now().plusDays(2).withHour(10).withMinute(0).format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")))
+    }
+    var timezone by remember { mutableStateOf(ZoneId.systemDefault().id) }
+    var location by remember { mutableStateOf("") }
+    var interviewMessage by remember { mutableStateOf("Interview details are stored locally; a reminder is scheduled one hour before the interview.") }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) interviewMessage = "Interview saved, but notifications are disabled. Enable notification permission in Android settings."
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Application tracker", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
         Text("Saved jobs are stored locally. Change each stage as you progress.", color = ScreenMuted, fontSize = 12.sp)
@@ -178,6 +200,49 @@ fun TrackerScreen(context: Context) {
                             }) { Text(stage, fontSize = 9.sp) }
                         }
                     }
+                }
+            }
+        }
+        Divider(color = Color(0xFF303945))
+        Text("INTERVIEW PLANNER", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        OutlinedTextField(value = company, onValueChange = { company = it }, label = { Text("Company") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = role, onValueChange = { role = it }, label = { Text("Role") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = dateTime, onValueChange = { dateTime = it }, label = { Text("Local date/time (yyyy-MM-ddTHH:mm)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = timezone, onValueChange = { timezone = it }, label = { Text("Time zone (e.g. Asia/Karachi)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        OutlinedTextField(value = location, onValueChange = { location = it }, label = { Text("Interview location or meeting link") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+        Button(onClick = {
+            try {
+                require(company.isNotBlank() && role.isNotBlank()) { "Company and role are required." }
+                val epoch = LocalDateTime.parse(dateTime).atZone(ZoneId.of(timezone)).toInstant().toEpochMilli()
+                val interview = InterviewRecord(
+                    id = UUID.randomUUID().toString(),
+                    applicationId = "",
+                    company = company.trim(),
+                    role = role.trim(),
+                    scheduledAtEpochMs = epoch,
+                    timeZoneId = timezone.trim(),
+                    locationOrLink = location.trim(),
+                    notes = ""
+                )
+                InterviewReminderScheduler.schedule(context, interview)
+                InterviewStore(context).save(interview)
+                interviews = InterviewStore(context).all()
+                interviewMessage = "Interview saved. A local reminder is scheduled for one hour before."
+                if (Build.VERSION.SDK_INT >= 33) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                company = ""
+                role = ""
+                location = ""
+            } catch (e: Exception) {
+                interviewMessage = "Could not schedule interview: ${e.message ?: e.javaClass.simpleName}"
+            }
+        }, modifier = Modifier.fillMaxWidth()) { Text("Save interview and reminder") }
+        Text(interviewMessage, color = ScreenMuted, fontSize = 12.sp)
+        interviews.forEach { interview ->
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ScreenPanel)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("${interview.role} • ${interview.company}", fontWeight = FontWeight.SemiBold)
+                    Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(interview.scheduledAtEpochMs)) + " • " + interview.timeZoneId, color = ScreenMuted, fontSize = 11.sp)
+                    if (interview.locationOrLink.isNotBlank()) Text(interview.locationOrLink, color = ScreenMuted, fontSize = 11.sp)
                 }
             }
         }
