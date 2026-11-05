@@ -46,7 +46,11 @@ class JobDiscoveryRepository(context: Context) {
         leverSites: List<String> = emptyList()
     ): List<SourceResult> {
         val results = mutableListOf<SourceResult>()
-        results += api.searchArbeitnow(query, countries)
+        results += if (limiter.tryAcquire("arbeitnow", 6, 60 * 60 * 1000L)) {
+            api.searchArbeitnow(query, countries)
+        } else {
+            SourceResult("Arbeitnow", emptyList(), "Refresh limited to once per hour and six requests per UTC day.")
+        }
         results += if (limiter.tryAcquire("remotive", 4, 6 * 60 * 60 * 1000L)) {
             api.searchRemotive(query, countries)
         } else {
