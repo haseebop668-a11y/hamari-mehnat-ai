@@ -38,7 +38,7 @@ ADZUNA_APP_ID = ""
 ADZUNA_APP_KEY = ""
 ```
 
-MongoDB collections used: `profiles`, `jobs`, `applications`. The app uses a single owner profile document with `_id=owner`.
+MongoDB collections used: `profiles`, `search_results`, `saved_jobs`, `applications`. The app uses a single owner profile document with `_id=owner`.
 
 ## Security
 - Keep the GitHub repository private before adding personal data or secrets.
