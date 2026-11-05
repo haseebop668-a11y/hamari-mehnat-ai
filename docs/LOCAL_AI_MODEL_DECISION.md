@@ -3,8 +3,8 @@
 ## Primary candidate: distilled LFM2.5 QAD
 - Hugging Face repository: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF
 - File: `LFM2.5-1.2B-Instruct-QAD-Q4_0.gguf` (about 696 MB).
-- Revision pinned for download: `430bea1` (verified model-file page revision).
-- SHA-256: `bb741ebb106d543e9de114b843a3d3d73d51c74b5801e69da2abde821a0cb3e1`.
+- Revision pinned for download: `8ed288026e23958ad9dfa92d53ed773a8eee7125` (full immutable Hugging Face commit).
+- Exact file size: `695,755,488` bytes. SHA-256: `bb741ebb106d543e9de114b843a3d3d73d51c74b5801e69da2abde821a0cb3e1`.
 - Training description: Liquid AI describes QAD as a high-precision teacher distilled into a quantized student; reported results recover 97% of the BF16 average accuracy lost to quantization. This is the teacher/student-style checkpoint requested.
 - Runtime: upstream llama.cpp Android JNI/NDK. The model remains a separate user-downloaded artifact; it is not bundled into the APK.
 - License: LFM Open License v1.0. It permits free commercial use below the USD 10 million annual-revenue threshold and research/nonprofit use without that threshold. Include the license and required attribution if redistributing the model.
