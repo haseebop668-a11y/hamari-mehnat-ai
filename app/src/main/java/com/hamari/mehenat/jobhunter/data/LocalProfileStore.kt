@@ -16,7 +16,7 @@ class LocalProfileStore(context: Context) {
     private val alias = "hamari_mehnat_profile_key"
 
     fun save(profileJson: String) {
-        require(profileJson.length <= 100_000) { "Profile too large" }
+        require(profileJson.length <= 200_000) { "Profile too large" }
         val parsed = JSONObject(profileJson)
         val encrypted = encrypt(parsed.toString().toByteArray(Charsets.UTF_8))
         prefs.edit().putString("profile", android.util.Base64.encodeToString(encrypted, android.util.Base64.NO_WRAP)).apply()
