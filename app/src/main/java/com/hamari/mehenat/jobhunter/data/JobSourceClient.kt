@@ -147,8 +147,9 @@ class JobSourceClient(
 
     fun isHimalayasJobOpen(verificationUrl: String): Boolean {
         val uri = java.net.URI(verificationUrl)
-        require(uri.scheme == "https" && uri.host == "himalayas.app" &&
-            uri.path.startsWith("/jobs/api/companies/")) { "Invalid Himalayas verification URL." }
+        val trustedBase = java.net.URI(himalayasVerificationBaseUrl)
+        require(uri.scheme == trustedBase.scheme && uri.host == trustedBase.host &&
+            uri.path.startsWith(trustedBase.path + "/")) { "Invalid Himalayas verification URL." }
         val request = Request.Builder()
             .url(verificationUrl)
             .header("User-Agent", "HamariMehnatPersonalAndroid/1.0")
