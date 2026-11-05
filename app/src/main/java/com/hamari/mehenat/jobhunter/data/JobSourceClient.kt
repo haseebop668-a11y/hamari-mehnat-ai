@@ -22,7 +22,7 @@ class JobSourceClient(
         val found = mutableListOf<JobListing>()
         return try {
             for (page in 1..maxPages.coerceIn(1, 5)) {
-                val url = $arbeitnowBaseUrl?page=$page
+                val url = "${arbeitnowBaseUrl}?page=$page"
                 val json = getJson(url)
                 val data = json.optJSONArray("data") ?: break
                 if (data.length() == 0) break
@@ -57,7 +57,7 @@ class JobSourceClient(
     fun searchRemotive(query: String, countries: List<String>, limit: Int = 50): SourceResult {
         return try {
             val encoded = java.net.URLEncoder.encode(query, Charsets.UTF_8.name())
-            val json = getJson($remotiveBaseUrl?search=$encoded&limit=${limit.coerceIn(1, 100)})
+            val json = getJson("${remotiveBaseUrl}?search=$encoded&limit=${limit.coerceIn(1, 100)}")
             val data = json.optJSONArray("jobs") ?: org.json.JSONArray()
             val jobs = (0 until data.length()).mapNotNull { i ->
                 val item = data.optJSONObject(i) ?: return@mapNotNull null
