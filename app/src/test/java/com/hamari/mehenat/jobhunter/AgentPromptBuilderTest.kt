@@ -13,7 +13,7 @@ class AgentPromptBuilderTest {
             verifiedProfile = "Worked as a warehouse assistant for 6 months.",
             vacancyOrSourceEvidence = "Forklift license preferred."
         )
-        assertTrue(prompt.contains("never add qualifications"))
+        assertTrue(prompt.contains("never add qualifications", ignoreCase = true))
         assertTrue(prompt.contains("Worked as a warehouse assistant"))
         assertTrue(prompt.contains("Forklift license preferred"))
         assertTrue(prompt.contains("Not provided"))
