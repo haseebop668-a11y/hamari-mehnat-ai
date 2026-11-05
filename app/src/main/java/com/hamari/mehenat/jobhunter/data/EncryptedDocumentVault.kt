@@ -40,7 +40,13 @@ class EncryptedDocumentVault(context: Context) {
         val metadata = "$displayName\n$mimeType\n".toByteArray(Charsets.UTF_8)
         val payload = metadata + raw
         val encrypted = encrypt(payload)
-        File(directory, "$id.vault").writeBytes(encrypted)
+        val temporary = File(directory, "$id.vault.part")
+        java.io.FileOutputStream(temporary).use { output ->
+            output.write(encrypted)
+            output.fd.sync()
+        }
+        val destination = File(directory, "$id.vault")
+        check(temporary.renameTo(destination)) { "Could not finalize encrypted document." }
         return VaultDocument(id, displayName, mimeType, raw.size.toLong())
     }
 
