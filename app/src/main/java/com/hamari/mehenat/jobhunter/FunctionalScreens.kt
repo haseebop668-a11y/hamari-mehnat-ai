@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.hamari.mehenat.jobhunter.data.EncryptedDocumentVault
 import com.hamari.mehenat.jobhunter.data.DocumentTextExtractor
 import com.hamari.mehenat.jobhunter.data.JobSourceClient
+import com.hamari.mehenat.jobhunter.data.JobDiscoveryRepository
 import com.hamari.mehenat.jobhunter.data.LocalProfileStore
 import com.hamari.mehenat.jobhunter.data.LocalModelManager
 import com.hamari.mehenat.jobhunter.ai.NativeLlama
@@ -70,7 +71,7 @@ fun JobsScreen(context: Context) {
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Job discovery", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-        Text("Public feeds only. No LinkedIn/Indeed login scraping or access-control bypass.", color = ScreenMuted, fontSize = 12.sp)
+        Text("Public feeds only. No LinkedIn/Indeed login scraping or access-control bypass. Remotive listings are delayed 24 hours and its free API is capped at 4 calls/day; always verify the employer's live listing.", color = ScreenMuted, fontSize = 12.sp)
         OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Role / keywords") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(value = countries, onValueChange = { countries = it }, label = { Text("Target countries (comma separated)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = greenhouseBoards, onValueChange = { greenhouseBoards = it }, label = { Text("Optional Greenhouse company board IDs") }, modifier = Modifier.fillMaxWidth())
@@ -85,12 +86,11 @@ fun JobsScreen(context: Context) {
                     scope.launch {
                         val countryList = countries.split(",").map { it.trim() }.filter { it.isNotBlank() }
                         val sourceResults = withContext(Dispatchers.IO) {
-                            val api = JobSourceClient()
-                            listOf(
-                                api.searchArbeitnow(query, countryList),
-                                api.searchRemotive(query, countryList),
-                                api.searchGreenhouse(query, countryList, greenhouseBoards.split(",").map { it.trim() }.filter { it.isNotBlank() }),
-                                api.searchLever(query, countryList, leverSites.split(",").map { it.trim() }.filter { it.isNotBlank() })
+                            JobDiscoveryRepository(context).search(
+                                query = query,
+                                countries = countryList,
+                                greenhouseBoards = greenhouseBoards.split(",").map { it.trim() }.filter { it.isNotBlank() },
+                                leverSites = leverSites.split(",").map { it.trim() }.filter { it.isNotBlank() }
                             )
                         }
                         results = sourceResults.flatMap { it.jobs }.distinctBy { it.id }
