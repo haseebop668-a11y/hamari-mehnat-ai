@@ -20,7 +20,7 @@ class LocalModelManager(context: Context) {
     val modelFile: File
         get() = File(modelDirectory, MODEL_FILENAME)
 
-    fun isDownloaded(): Boolean = modelFile.isFile && modelFile.length() > 0L
+    fun isDownloaded(): Boolean = modelFile.isFile && modelFile.length() == EXPECTED_SIZE_BYTES
 
     fun verifyInstalled(): Boolean {
         if (!isDownloaded()) return false
@@ -44,6 +44,7 @@ class LocalModelManager(context: Context) {
             check(response.isSuccessful) { "Model download failed: HTTP ${response.code}" }
             val body = response.body ?: error("Model download returned an empty response.")
             val total = body.contentLength()
+            if (total > 0L) check(total == EXPECTED_SIZE_BYTES) { "Unexpected model file size: $total bytes" }
             val digest = MessageDigest.getInstance("SHA-256")
             var downloaded = 0L
             body.byteStream().use { input ->
@@ -60,6 +61,7 @@ class LocalModelManager(context: Context) {
                     output.fd.sync()
                 }
             }
+            check(downloaded == EXPECTED_SIZE_BYTES) { "Model file size mismatch: $downloaded bytes" }
             val actual = digest.digest().joinToString("") { "%02x".format(it) }
             check(actual.equals(EXPECTED_SHA256, ignoreCase = true)) {
                 "Model checksum verification failed. The partial download has been rejected."
@@ -90,7 +92,8 @@ class LocalModelManager(context: Context) {
     companion object {
         const val MODEL_FILENAME = "LFM2.5-1.2B-Instruct-QAD-Q4_0.gguf"
         const val EXPECTED_SHA256 = "bb741ebb106d543e9de114b843a3d3d73d51c74b5801e69da2abde821a0cb3e1"
-        const val DOWNLOAD_URL = "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/430bea1/LFM2.5-1.2B-Instruct-QAD-Q4_0.gguf?download=true"
+        const val DOWNLOAD_URL = "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/8ed288026e23958ad9dfa92d53ed773a8eee7125/LFM2.5-1.2B-Instruct-QAD-Q4_0.gguf?download=true"
+        const val EXPECTED_SIZE_BYTES = 695755488L
         private const val MIN_FREE_SPACE_BYTES = 900L * 1024L * 1024L
     }
 }
