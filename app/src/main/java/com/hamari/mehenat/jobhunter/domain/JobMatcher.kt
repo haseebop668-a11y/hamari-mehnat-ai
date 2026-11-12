@@ -37,6 +37,7 @@ class JobMatcher {
             .filter { it.isNotBlank() && text.contains(it) }.distinct()
 
         val sponsorship = detectSponsorship(text)
+        val countryAssessment = CountryJobPolicy().assess(job.country, job.title, job.description)
         var score = 20
         val reasons = mutableListOf<String>()
 
@@ -64,8 +65,10 @@ class JobMatcher {
             }
             SponsorshipSignal.NOT_MENTIONED -> Unit
         }
+        countryAssessment.evidence.forEach { reasons += "Country policy evidence: $it" }
+        reasons += countryAssessment.disclaimer
         reasons += "Relevance estimate only; not a hiring, work-rights or visa eligibility decision"
-        return JobMatch(job.id, score.coerceIn(0, 100), sponsorship, reasons)
+        return JobMatch(job.id, score.coerceIn(0, 100), sponsorship, reasons, countryAssessment)
     }
 
     fun detectSponsorship(text: String): SponsorshipSignal {
