@@ -162,6 +162,10 @@ private fun HomeScreen(context: Context) {
         OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("Phone") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(value = roles, onValueChange = { roles = it }, label = { Text("Target roles (comma separated)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = countries, onValueChange = { countries = it }, label = { Text("Target countries (comma separated)") }, modifier = Modifier.fillMaxWidth())
+        Text(
+            "Country modules: " + com.hamari.mehenat.jobhunter.domain.CountryRegistry.supportedNames().joinToString(" • "),
+            color = Muted, fontSize = 11.sp, lineHeight = 16.sp
+        )
         OutlinedTextField(value = skills, onValueChange = { skills = it }, label = { Text("Skills (comma separated)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = experience, onValueChange = { experience = it }, label = { Text("Experience summary") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
         Button(onClick = {
