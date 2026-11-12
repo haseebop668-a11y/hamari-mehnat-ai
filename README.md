@@ -24,6 +24,16 @@ A private, single-owner Android application for international job discovery and 
 - **Visa/work-permit research:** fetches bounded excerpts from registered official government pages, records retrieval timestamps and stores the evidence locally for the visa specialist agent.
 - **Scheduled discovery:** WorkManager runs every 12 hours only while network connectivity is available, rotates configured target roles and stores matching vacancies locally.
 
+## Multi-country support
+
+The Android core is country-neutral. Immigration requirements and official verification entry points are registered as country modules rather than embedded in the shared matcher.
+
+Initial country modules: New Zealand (AEWV), Australia (employer-sponsored skilled pathways), United Kingdom (Skilled Worker), Germany (qualified-professional routes), and Canada (employer-specific permits / LMIA or exemption). These are official research starting points, not visa decisions.
+
+To add a country, register its ISO country code, official immigration authority, work route, employer verification method and official sources in CountryRegistry. Add a dedicated policy/source adapter and fixture-based tests only where local rules require it. Shared profile, CV, matching, tracker, encrypted storage and navigation remain reusable. See docs/MULTI_COUNTRY_ARCHITECTURE.md.
+
+Country-specific sponsorship wording is triage only. Employer accreditation/licensing does not establish that a particular job can sponsor a particular applicant. Verify current rules and job-specific conditions at official sources.
+
 ## Job source notes
 
 - Remotive listings are delayed by 24 hours; the app caps its public API use at four requests per UTC day and enforces a six-hour interval.
