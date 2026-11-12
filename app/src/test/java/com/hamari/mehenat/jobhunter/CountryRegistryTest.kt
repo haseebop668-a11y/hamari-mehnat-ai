@@ -17,6 +17,8 @@ class CountryRegistryTest {
             assertTrue(it.immigrationAuthorityUrl.startsWith("https://"))
             assertTrue(it.officialSources.isNotEmpty())
             assertTrue(it.officialSources.all { source -> source.url.startsWith("https://") })
+            assertTrue(it.jobSources.isNotEmpty())
+            assertTrue(it.jobSources.all { source -> source.url.startsWith("https://") })
         }
     }
     @Test fun sponsorshipIsPotentialNotVerified() {
