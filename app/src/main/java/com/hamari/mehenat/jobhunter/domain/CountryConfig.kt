@@ -9,9 +9,18 @@ data class CountryConfig(
     val immigrationAuthorityUrl: String,
     val employerVerificationName: String,
     val employerVerificationUrl: String?,
-    val officialSources: List<CountryOfficialSource>
+    val officialSources: List<CountryOfficialSource>,
+    val jobSources: List<CountryJobSource> = emptyList()
 )
 data class CountryOfficialSource(val title: String, val url: String, val purpose: String)
+enum class CountrySourceAccess { PUBLIC_FEED, AUTHORIZED_API, BROWSER_HANDOFF, OFFICIAL_REGISTER }
+data class CountryJobSource(
+    val id: String,
+    val displayName: String,
+    val url: String,
+    val access: CountrySourceAccess,
+    val note: String
+)
 
 object CountryRegistry {
     private val configs = listOf(
@@ -19,26 +28,36 @@ object CountryRegistry {
             "https://www.immigration.govt.nz/visas/accredited-employer-work-visa/","Accredited employer check",
             "https://www.immigration.govt.nz/employ-migrants/accredited-employer-check/",
             listOf(CountryOfficialSource("AEWV","https://www.immigration.govt.nz/visas/accredited-employer-work-visa/","Visa and job-offer requirements."),
-                CountryOfficialSource("Accredited employer check","https://www.immigration.govt.nz/employ-migrants/accredited-employer-check/","Employer accreditation; not proof that a specific vacancy can sponsor."))),
+                CountryOfficialSource("Accredited employer check","https://www.immigration.govt.nz/employ-migrants/accredited-employer-check/","Employer accreditation; not proof that a specific vacancy can sponsor.")),
+            listOf(
+                CountryJobSource("trade-assist","Trade Assist","https://tradeassist.net/find-work",CountrySourceAccess.BROWSER_HANDOFF,"Recruitment listings; ask recruiter whether the specific role supports an AEWV."),
+                CountryJobSource("enterprise-nz","Enterprise Recruitment NZ","https://www.enterprise.co.nz/",CountrySourceAccess.BROWSER_HANDOFF,"Use the New Zealand agency site; confirm vacancy and work-rights policy."),
+                CountryJobSource("tradestaff","Tradestaff","https://www.tradestaff.co.nz/",CountrySourceAccess.BROWSER_HANDOFF,"Check role-specific work-rights and sponsorship conditions."),
+                CountryJobSource("seek-nz","SEEK New Zealand","https://www.seek.co.nz/",CountrySourceAccess.BROWSER_HANDOFF,"Use official browser hand-off unless authorized API access is granted.")
+            )),
         CountryConfig("AU","Australia","Employer sponsored skilled visa pathways","Department of Home Affairs",
             "https://immi.homeaffairs.gov.au/visas/working-in-australia/skill-occupation-list","Approved sponsor and nomination checks",
             "https://immi.homeaffairs.gov.au/visas/employing-and-sponsoring-someone/sponsoring-workers",
             listOf(CountryOfficialSource("Skilled occupation list","https://immi.homeaffairs.gov.au/visas/working-in-australia/skill-occupation-list","Occupation and assessing-authority requirements."),
-                CountryOfficialSource("Employer sponsored workers","https://immi.homeaffairs.gov.au/visas/employing-and-sponsoring-someone/sponsoring-workers","Sponsorship and nomination pathways."))),
+                CountryOfficialSource("Employer sponsored workers","https://immi.homeaffairs.gov.au/visas/employing-and-sponsoring-someone/sponsoring-workers","Sponsorship and nomination pathways.")),
+            listOf(CountryJobSource("seek-au","SEEK Australia","https://www.seek.com.au/",CountrySourceAccess.BROWSER_HANDOFF,"Official job-search hand-off; no unauthorized scraping."))),
         CountryConfig("GB","United Kingdom","Skilled Worker visa","UK Visas and Immigration",
             "https://www.gov.uk/skilled-worker-visa","Register of licensed worker sponsors",
             "https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers",
             listOf(CountryOfficialSource("Skilled Worker visa","https://www.gov.uk/skilled-worker-visa","Job, salary and applicant requirements."),
-                CountryOfficialSource("Licensed worker sponsors","https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers","Check sponsor licence."))),
+                CountryOfficialSource("Licensed worker sponsors","https://www.gov.uk/government/publications/register-of-licensed-sponsors-workers","Check sponsor licence.")),
+            listOf(CountryJobSource("uk-find-a-job","Find a job","https://www.gov.uk/find-a-job",CountrySourceAccess.BROWSER_HANDOFF,"Official UK job-search service."))),
         CountryConfig("DE","Germany","Qualified professionals work visa and other applicable routes","Make it in Germany",
             "https://www.make-it-in-germany.com/en/visa-residence/types/work-qualified-professionals","Qualification and job-offer verification",null,
             listOf(CountryOfficialSource("Qualified professionals","https://www.make-it-in-germany.com/en/visa-residence/types/work-qualified-professionals","Qualification recognition and job requirements."),
-                CountryOfficialSource("Visa and residence overview","https://www.make-it-in-germany.com/en/visa-residence","Official route overview."))),
+                CountryOfficialSource("Visa and residence overview","https://www.make-it-in-germany.com/en/visa-residence","Official route overview.")),
+            listOf(CountryJobSource("make-it-in-germany","Make it in Germany jobs","https://www.make-it-in-germany.com/en/working-in-germany/job-listings",CountrySourceAccess.BROWSER_HANDOFF,"Official international recruitment information and job listings."))),
         CountryConfig("CA","Canada","Employer-specific work permit (LMIA or exemption)","IRCC",
             "https://www.canada.ca/en/immigration-refugees-citizenship/services/work-canada.html","LMIA and employer compliance information",
             "https://www.canada.ca/en/employment-social-development/services/foreign-workers.html",
             listOf(CountryOfficialSource("Work in Canada","https://www.canada.ca/en/immigration-refugees-citizenship/services/work-canada.html","Work permit routes."),
-                CountryOfficialSource("Hire a temporary foreign worker","https://www.canada.ca/en/employment-social-development/services/foreign-workers.html","Employer LMIA and compliance.")))
+                CountryOfficialSource("Hire a temporary foreign worker","https://www.canada.ca/en/employment-social-development/services/foreign-workers.html","Employer LMIA and compliance.")),
+            listOf(CountryJobSource("job-bank","Canada Job Bank","https://www.jobbank.gc.ca/findajob",CountrySourceAccess.BROWSER_HANDOFF,"Use filters for jobs open to international candidates; verify LMIA/employer claims.")))
     )
     fun all(): List<CountryConfig> = configs.toList()
     fun supportedNames(): List<String> = configs.map { it.displayName }
