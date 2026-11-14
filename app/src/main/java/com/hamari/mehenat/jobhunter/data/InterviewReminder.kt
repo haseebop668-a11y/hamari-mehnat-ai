@@ -111,13 +111,9 @@ object InterviewReminderScheduler {
     fun schedule(context: Context, interview: InterviewRecord) {
         val delay = interview.scheduledAtEpochMs - System.currentTimeMillis() - TimeUnit.HOURS.toMillis(1)
         require(delay > 0L) { "Interview must be more than one hour in the future." }
+        // Keep personally identifying interview details out of WorkManager's own database.
         val data = Data.Builder()
             .putString("interview_id", interview.id)
-            .putString("company", interview.company)
-            .putString("role", interview.role)
-            .putLong("scheduled_at", interview.scheduledAtEpochMs)
-            .putString("timezone", interview.timeZoneId)
-            .putString("location", interview.locationOrLink)
             .build()
         val request = OneTimeWorkRequestBuilder<InterviewReminderWorker>()
             .setInitialDelay(delay, TimeUnit.MILLISECONDS)
@@ -134,11 +130,15 @@ object InterviewReminderScheduler {
 class InterviewReminderWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
         return try {
-            val company = inputData.getString("company").orEmpty()
-            val role = inputData.getString("role").orEmpty()
-            val timezone = inputData.getString("timezone").orEmpty()
-            val location = inputData.getString("location").orEmpty()
-            val scheduledAt = inputData.getLong("scheduled_at", 0L)
+            val interviewId = inputData.getString("interview_id")
+                ?: return Result.failure()
+            val interview = InterviewStore(applicationContext).all()
+                .firstOrNull { it.id == interviewId } ?: return Result.success()
+            val company = interview.company
+            val role = interview.role
+            val timezone = interview.timeZoneId
+            val location = interview.locationOrLink
+            val scheduledAt = interview.scheduledAtEpochMs
             val channelId = "interview_reminders"
             val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
