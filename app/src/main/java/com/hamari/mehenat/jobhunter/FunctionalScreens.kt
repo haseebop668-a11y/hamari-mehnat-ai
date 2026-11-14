@@ -478,6 +478,10 @@ fun FilesScreen(context: Context) {
     var extractedText by remember { mutableStateOf("") }
     var extractedFileName by remember { mutableStateOf("") }
     var extractedContractReport by remember { mutableStateOf<EmploymentContractReport?>(null) }
+    var expectedContractEmployer by remember { mutableStateOf("") }
+    var expectedContractRole by remember { mutableStateOf("") }
+    var expectedContractLocation by remember { mutableStateOf("") }
+    var expectedContractPay by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -549,12 +553,47 @@ fun FilesScreen(context: Context) {
             Text(cvPreview, color = ScreenMuted, fontSize = 11.sp)
             if (extractedText.isNotBlank()) {
                 Text("Extracted from: $extractedFileName", color = ScreenMuted, fontSize = 10.sp)
+                Text("Optional vacancy cross-checks", color = ScreenGold, fontWeight = FontWeight.SemiBold)
+                OutlinedTextField(
+                    value = expectedContractEmployer,
+                    onValueChange = { expectedContractEmployer = it; extractedContractReport = null },
+                    label = { Text("Expected employer legal name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = expectedContractRole,
+                    onValueChange = { expectedContractRole = it; extractedContractReport = null },
+                    label = { Text("Expected job title") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = expectedContractLocation,
+                    onValueChange = { expectedContractLocation = it; extractedContractReport = null },
+                    label = { Text("Expected work location") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = expectedContractPay,
+                    onValueChange = { expectedContractPay = it; extractedContractReport = null },
+                    label = { Text("Advertised hourly pay (NZD)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
                 Button(
                     onClick = {
-                        extractedContractReport = EmploymentContractAnalyzer().analyze(extractedText)
+                        extractedContractReport = EmploymentContractAnalyzer().analyze(
+                            contractText = extractedText,
+                            expectedEmployerName = expectedContractEmployer.takeIf(String::isNotBlank),
+                            expectedJobTitle = expectedContractRole.takeIf(String::isNotBlank),
+                            expectedWorkLocation = expectedContractLocation.takeIf(String::isNotBlank),
+                            advertisedHourlyPayNzd = expectedContractPay.toDoubleOrNull()
+                        )
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Review extracted text as an employment agreement") }
+                ) { Text("Review agreement and cross-check vacancy") }
                 extractedContractReport?.let { report ->
                     Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
