@@ -87,6 +87,13 @@ class NzVerificationTest {
         assertTrue(report.findings.any { it.code == "aewv_hours_below_minimum" })
     }
 
+    @Test fun explicitNoTrialStatementIsNotFlaggedAsATrialClause() {
+        val report = EmploymentContractAnalyzer().analyze(
+            "The agreement states that no trial period applies. Guaranteed hours: 40 hours per week."
+        )
+        assertFalse(report.findings.any { it.code == "prohibited_trial_period" })
+    }
+
     @Test fun contractCrossChecksAdvertisedPayAndWorkLocation() {
         val report = EmploymentContractAnalyzer().analyze(
             "Employer: Example Civil. Position: Civil Labourer. Place of work: Christchurch. " +
