@@ -102,7 +102,23 @@ object ApplicationPdfGenerator {
 
                 fun drawWrapped(text: String, paint: Paint, lineHeight: Float, indent: Float = 0f) {
                     val available = right - left - indent
-                    val words = text.trim().split(Regex("\\s+")).filter(String::isNotBlank)
+                    val words = text.trim().split(Regex("\\s+")).filter(String::isNotBlank).flatMap { word ->
+                        if (paint.measureText(word) <= available) listOf(word) else {
+                            val pieces = mutableListOf<String>()
+                            var piece = StringBuilder()
+                            word.forEach { character ->
+                                val candidate = piece.toString() + character
+                                if (piece.isNotEmpty() && paint.measureText(candidate) > available) {
+                                    pieces += piece.toString()
+                                    piece = StringBuilder(character.toString())
+                                } else {
+                                    piece.append(character)
+                                }
+                            }
+                            if (piece.isNotEmpty()) pieces += piece.toString()
+                            pieces
+                        }
+                    }
                     if (words.isEmpty()) {
                         y += lineHeight
                         return
