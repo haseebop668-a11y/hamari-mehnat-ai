@@ -499,9 +499,10 @@ fun FilesScreen(context: Context) {
                         TextButton(onClick = {
                             scope.launch {
                                 try {
-                                    val extracted = withContext(Dispatchers.IO) {
+                                    val (stored, extracted) = withContext(Dispatchers.IO) {
                                         val stored = EncryptedDocumentVault(context).readDocument(id)
-                                        DocumentTextExtractor(context).extract(stored.document.originalName, stored.bytes)
+                                        val extracted = DocumentTextExtractor(context).extract(stored.document.originalName, stored.bytes)
+                                        stored to extracted
                                     }
                                     val profile = LocalProfileStore(context).load() ?: org.json.JSONObject()
                                     val isCv = stored.document.originalName.contains(Regex("(?i)(cv|resume)"))
