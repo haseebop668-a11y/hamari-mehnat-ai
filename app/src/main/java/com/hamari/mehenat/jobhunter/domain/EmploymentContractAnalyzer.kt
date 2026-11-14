@@ -109,7 +109,7 @@ class EmploymentContractAnalyzer {
 
         if (expectedEmployerName.isNullOrBlank()) {
             findings += ContractFinding("employer_crosscheck_pending", "Employer identity cross-check pending", "Enter the expected employer legal name and compare it with the contract and official accreditation evidence.", ContractFindingSeverity.WARNING, ContractCheckStatus.REVIEW_REQUIRED)
-        } else if (!normalized.contains(expectedEmployerName.lowercase(Locale.ROOT))) {
+        } else if (!normalizeForMatch(normalized).contains(normalizeForMatch(expectedEmployerName))) {
             findings += ContractFinding("employer_name_mismatch", "Employer name mismatch", "The supplied expected employer name was not found in the contract text. Confirm the legal entity and any trading-name relationship.", ContractFindingSeverity.HIGH_RISK, ContractCheckStatus.FLAGGED)
         }
         if (!expectedJobTitle.isNullOrBlank() && !normalized.contains(expectedJobTitle.lowercase(Locale.ROOT))) {
@@ -126,4 +126,7 @@ class EmploymentContractAnalyzer {
         }
         return EmploymentContractReport(findings, hours, hourlyPay, highRisk, summary)
     }
+
+    private fun normalizeForMatch(value: String): String =
+        value.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
 }
