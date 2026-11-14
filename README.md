@@ -14,6 +14,7 @@ A private, single-owner Android application for international job discovery and 
 
 - **Profile:** encrypted owner profile with target roles, countries, skills and experience summary.
 - **Document vault:** PDF, DOCX, TXT and image import into app-private AES-GCM encrypted files. PDF/DOCX/TXT text extraction is local. Scanned-PDF/image OCR is not enabled.
+- **Application PDF export:** local CV-tailoring and cover-letter drafts can be exported to a user-selected PDF location after review.
 - **Job discovery:** Arbeitnow, Remotive, Himalayas, Jobicy, Greenhouse public company boards and Lever public company boards. LinkedIn, Indeed, SEEK and EURES are browser hand-off links; login-protected pages are not scraped.
 - **Source compliance:** rate limits for public APIs, direct source/application URLs, source attribution, expiry filtering for Himalayas listings and no onward job-feed redistribution.
 - **Matching:** deterministic role/skill/country relevance scoring with cautious sponsorship wording. A sponsorship signal is not a guarantee of sponsorship or visa eligibility.
@@ -22,6 +23,8 @@ A private, single-owner Android application for international job discovery and 
 - **Tracker:** saved jobs, application stages, employer contact/response notes and local interview history.
 - **Interview reminders:** local notification scheduled one hour before the interview in the entered time zone.
 - **Visa/work-permit research:** fetches bounded excerpts from registered official government pages, records retrieval timestamps and stores the evidence locally for the visa specialist agent.
+- **New Zealand employer checks:** searches the public accredited-employer register endpoint used by Immigration New Zealand's own search page, checks exact NZBN matches and published accreditation expiry, and links back to INZ. Name-only matches require NZBN confirmation; no public match is inconclusive because some employers opt out of publication.
+- **AEWV agreement review:** checks pasted or extracted contract text for missing core terms, weekly hours, pay, trial-period wording, employer/job-title mismatches and common exploitation red flags. This is a first-pass checklist, not legal advice.
 - **Scheduled discovery:** WorkManager runs every 12 hours only while network connectivity is available, rotates configured target roles and stores matching vacancies locally.
 
 ## Multi-country support
@@ -41,6 +44,7 @@ Country-specific sponsorship wording is triage only. Employer accreditation/lice
 - Jobicy public API use is limited to four requests per day with at least one hour between calls.
 - Greenhouse and Lever endpoints are company-board-specific. Enter board IDs/site names in the Jobs tab; they are not global job-search APIs.
 - LinkedIn, Indeed and SEEK do not provide an unrestricted public API for all logged-in listings. The app opens their official search pages in a browser rather than bypassing access controls.
+- For New Zealand, SEEK NZ, Tradestaff, Trade Assist and Enterprise Recruitment are browser hand-off sources. They are not represented as live API integrations.
 
 ## Local AI model
 
