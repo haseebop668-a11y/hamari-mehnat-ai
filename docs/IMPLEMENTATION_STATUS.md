@@ -54,6 +54,25 @@ This document distinguishes code present in the branch from checks that still re
 - Real-device checks are required for document import/export, notifications, model download/inference, RAM, battery and thermal behaviour.
 - A user-owned release signing key is required for a distributable signed release APK. Never commit the keystore or passwords.
 
+## Latest verification
+
+- GitHub Actions run `43601268058` completed successfully for commit `b402bd5cdb1c081f02cbd4a10739f84746b6714e`.
+- ARM64 debug APK assembly and unit tests: passed.
+- Live public API and model endpoint smoke checks: passed.
+- Debug APK artifact `hamari-mehnat-debug-apk` uploaded (about 28.3 MB).
+- Subsequent Phase 2 hardening commits are being revalidated by the latest CI run; do not treat the earlier successful run as validation of later commits.
+
+## Phase 2 work started after Phase 1 CI passed
+
+- Bound DOCX ZIP entry count and expanded document XML size to reduce ZIP-bomb/resource-exhaustion risk; disabled XML document type declarations.
+- Sanitized imported filename/MIME metadata and ensured interrupted vault writes remove temporary files.
+- Improved PDF export to wrap unusually long unbroken tokens rather than clipping them.
+- Added expected employer, job title, work location and advertised hourly pay fields to the imported agreement review screen so contract text can be cross-checked against the vacancy.
+
+## Phase 3
+
+No new Phase 3 implementation is authorized yet. Existing navigation and UI remain in place. Await the user's review before adding Phase 3 features.
+
 ## Next acceptance gate
 
-Phase 1/2 source changes are in this branch. The current Android CI run is the authority for compile/test/build status. Do not mark the app finished or publish an APK link until CI is green and the artifact is present.
+Run Android CI against the latest branch head. Require ARM64 debug assembly, all unit tests, live smoke checks and artifact upload to pass. Then inspect the APK artifact and provide the user the verified artifact link. Real-device QA remains required for model inference, document picker/import/export, and notifications.
