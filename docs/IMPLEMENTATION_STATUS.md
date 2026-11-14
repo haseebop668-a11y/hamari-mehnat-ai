@@ -61,11 +61,13 @@ This document separates source implementation, automated verification, and real-
 - Official visa page extraction rejects responses above 2 MB rather than silently analysing a truncated page.
 - INZ employer responses are capped at 1 MB; unrelated fuzzy search results are no longer labelled as exact name matches.
 - Expired vacancy cleanup now removes only records still in the `Saved` stage; progressed applications are preserved when a listing expires.
+- Tracker and interview personal text fields are now encrypted with a dedicated Android Keystore AES-GCM key; existing SQLite records are migrated on database upgrade.
+- Interview reminder work requests now persist only an interview UUID; reminder details are read from the encrypted local store. App startup refreshes older scheduled work to remove legacy plaintext input payloads.
 - Adzuna request failures do not echo credential-bearing URL details.
 - Regression tests cover all-token matching, ISO country aliases, insecure link rejection and oversized official-source pages.
 - Android CI concurrency now groups push and pull-request runs by the same head branch to avoid duplicate builds.
 - API architecture: Android-side public API clients only; no separate REST backend is deployed, consistent with the Android-only single-user scope. Adzuna is optional and requires the user to register for personal API credentials. Country-specific official job-board API coverage remains incomplete where providers require credentials or expose no public API. Browser hand-offs remain explicitly labelled as such.
-- Security limitation: application tracker and interview records are stored in app-private SQLite but are not database-level encrypted. Profile and imported document content are encrypted with Android Keystore AES-GCM. Do not describe all local records as encrypted.
+- Security boundary: profile, document content, and personal tracker/interview text fields are encrypted with Android Keystore AES-GCM. Workflow metadata (IDs, stages, timestamps and time-zone identifiers) remains in app-private SQLite for querying; Android backup is disabled.
 
 ### Automated verification — latest previously verified baseline
 - Previously verified source commit: `6faeebe311ad42fec30fb7bb539927b1cec13ee3`.
