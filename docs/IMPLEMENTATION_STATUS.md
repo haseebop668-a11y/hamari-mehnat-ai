@@ -54,6 +54,13 @@ This document separates source implementation, automated verification, and real-
 - GitHub Actions builds ARM64 debug and minified release variants, runs unit tests and public endpoint smoke checks, and uploads the installable debug APK.
 - CI smoke checks are gating: a failed public endpoint/model metadata check fails the workflow rather than being silently ignored.
 
+### Connector architecture
+- External job sources now use a provider contract (`JobProvider`) and an in-process `JobProviderRegistry` with unique IDs, display metadata, provider type, credential requirement, supported-country metadata, per-provider daily request budgets and maximum per-search request costs.
+- Public feeds, Adzuna, Greenhouse and Lever are registered as independent connectors. `JobDiscoveryRepository` is the composition root; adding a provider does not require changing the matching engine or UI call sites.
+- The registry checks the local rate limiter before invoking a connector and isolates provider exceptions so one unavailable source does not cancel the entire search.
+- This is a safe Android plugin-style connector architecture, not arbitrary executable plugin installation. It does not download or run third-party code. Adzuna is the current user-authenticated API connector; its credentials remain encrypted in Android Keystore.
+- A generic remote MCP server client and user-configurable MCP server installation screen are not yet implemented. MCP servers can expose arbitrary tools and data access; adding that safely requires HTTPS Streamable HTTP transport, server identity/session handling, explicit per-tool permission prompts and a strict job-search tool schema. This is kept separate from the current API connector build rather than pretending a REST API key is an MCP connection.
+
 ### API audit and fixes in progress
 - Job source links now require a valid HTTPS URL with a host and no embedded user-info.
 - Keyword matching now requires every meaningful query token, reducing broad OR-match false positives.
@@ -64,6 +71,8 @@ This document separates source implementation, automated verification, and real-
 - Tracker and interview personal text fields are now encrypted with a dedicated Android Keystore AES-GCM key; existing SQLite records are migrated on database upgrade.
 - Interview reminder work requests now persist only an interview UUID; reminder details are read from the encrypted local store. App startup refreshes older scheduled work to remove legacy plaintext input payloads.
 - Adzuna request failures do not echo credential-bearing URL details.
+- Provider registry regression tests cover unique IDs, explicit provider enablement and rate-limit enforcement.
+- Latest CI audit found a duplicate `KeyProperties` import in `AdzunaCredentialsStore.kt`; this compile blocker was removed and the connector registry was added. A fresh CI run is required before calling the build verified.
 - Regression tests cover all-token matching, ISO country aliases, insecure link rejection and oversized official-source pages.
 - Android CI concurrency now groups push and pull-request runs by the same head branch to avoid duplicate builds.
 - API architecture: Android-side public API clients only; no separate REST backend is deployed, consistent with the Android-only single-user scope. Adzuna is optional and requires the user to register for personal API credentials. Country-specific official job-board API coverage remains incomplete where providers require credentials or expose no public API. Browser hand-offs remain explicitly labelled as such.
