@@ -340,6 +340,7 @@ private fun NzVerificationPanel(context: Context) {
                         when (result.status) {
                             NzEmployerLookupStatus.ACCREDITED_NZBN_MATCH -> "Exact NZBN match — accreditation listed"
                             NzEmployerLookupStatus.EXPIRED_NZBN_MATCH -> "NZBN match — published accreditation expired"
+                            NzEmployerLookupStatus.EXACT_NZBN_MATCH_EXPIRY_UNKNOWN -> "NZBN match — expiry date unavailable"
                             NzEmployerLookupStatus.EXACT_NAME_MATCH_REQUIRES_NZBN_CONFIRMATION -> "Employer name result — confirm NZBN"
                             NzEmployerLookupStatus.NO_PUBLIC_MATCH_INCONCLUSIVE -> "No public match — inconclusive"
                             NzEmployerLookupStatus.LOOKUP_FAILED -> "Lookup unavailable"
