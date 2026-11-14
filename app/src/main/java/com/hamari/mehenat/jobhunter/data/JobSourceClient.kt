@@ -262,7 +262,7 @@ class JobSourceClient(
                     )
                 }
             } catch (e: Exception) {
-                errors += "$selectedCountry: " + e.javaClass.simpleName + ": " + (e.message ?: "request failed")
+                errors += "$selectedCountry: " + e.javaClass.simpleName + " (request failed; credentials omitted)"
             }
         }
         return SourceResult("Adzuna", found.distinctBy { it.id }, errors.takeIf { it.isNotEmpty() }?.joinToString())
