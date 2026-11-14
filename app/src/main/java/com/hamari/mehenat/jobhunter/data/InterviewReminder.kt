@@ -64,10 +64,10 @@ class InterviewStore(context: Context) :
         }
         rows.forEach { row ->
             val values = ContentValues().apply {
-                put("company", cipher.encrypt(row[1]))
-                put("role", cipher.encrypt(row[2]))
-                put("location_or_link", cipher.encrypt(row[3]))
-                put("notes", cipher.encrypt(row[4]))
+                put("company", cipher.encryptIfNeeded(row[1]))
+                put("role", cipher.encryptIfNeeded(row[2]))
+                put("location_or_link", cipher.encryptIfNeeded(row[3]))
+                put("notes", cipher.encryptIfNeeded(row[4]))
             }
             db.update("interviews", values, "id = ?", arrayOf(row[0]))
         }
