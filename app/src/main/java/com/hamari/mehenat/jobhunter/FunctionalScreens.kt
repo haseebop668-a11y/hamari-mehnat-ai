@@ -458,6 +458,9 @@ fun FilesScreen(context: Context) {
     var message by remember { mutableStateOf("Documents are encrypted with an Android Keystore AES-GCM key and kept in app-private storage.") }
     var documentIds by remember { mutableStateOf(EncryptedDocumentVault(context).listIds()) }
     var cvPreview by remember { mutableStateOf("") }
+    var extractedText by remember { mutableStateOf("") }
+    var extractedFileName by remember { mutableStateOf("") }
+    var extractedContractReport by remember { mutableStateOf<EmploymentContractReport?>(null) }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -501,15 +504,19 @@ fun FilesScreen(context: Context) {
                                         DocumentTextExtractor(context).extract(stored.document.originalName, stored.bytes)
                                     }
                                     val profile = LocalProfileStore(context).load() ?: org.json.JSONObject()
-                                    profile.put("cv_text", extracted.text)
+                                    val isCv = stored.document.originalName.contains(Regex("(?i)(cv|resume)"))
+                                    profile.put(if (isCv) "cv_text" else "last_document_text", extracted.text)
                                     LocalProfileStore(context).save(profile.toString())
+                                    extractedText = extracted.text
+                                    extractedFileName = stored.document.originalName
+                                    extractedContractReport = null
                                     cvPreview = extracted.text.take(2200)
-                                    message = "Extracted ${extracted.text.length} characters from ${extracted.format} and saved the CV text encrypted in your profile."
+                                    message = "Extracted ${extracted.text.length} characters from ${extracted.format} and saved the extracted text encrypted in your profile."
                                 } catch (e: Exception) {
                                     message = "Text extraction failed: ${e.message ?: e.javaClass.simpleName}"
                                 }
                             }
-                        }) { Text("Extract CV text") }
+                        }) { Text("Extract text") }
                         TextButton(onClick = {
                             val deleted = EncryptedDocumentVault(context).delete(id)
                             documentIds = EncryptedDocumentVault(context).listIds()
@@ -522,6 +529,29 @@ fun FilesScreen(context: Context) {
         if (cvPreview.isNotBlank()) {
             Text("CV text preview", color = ScreenGold, fontWeight = FontWeight.SemiBold)
             Text(cvPreview, color = ScreenMuted, fontSize = 11.sp)
+            if (extractedText.isNotBlank()) {
+                Text("Extracted from: $extractedFileName", color = ScreenMuted, fontSize = 10.sp)
+                Button(
+                    onClick = {
+                        extractedContractReport = EmploymentContractAnalyzer().analyze(extractedText)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Review extracted text as an employment agreement") }
+                extractedContractReport?.let { report ->
+                    Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Text(report.summary, color = if (report.hasHighRiskFlags) Color(0xFFE7A08B) else ScreenGold, fontWeight = FontWeight.SemiBold)
+                            report.findings.forEach { finding ->
+                                Text(
+                                    "${finding.title}: ${finding.detail}",
+                                    color = if (finding.severity == ContractFindingSeverity.HIGH_RISK) Color(0xFFE7A08B) else ScreenMuted,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
