@@ -38,7 +38,7 @@ class JobSourceClient(
                     val location = item.optString("location")
                     val country = countryFromLocation(location, countries)
                     val description = item.optString("description")
-                    if (country != null && matches(query, "$title $description") && item.optString("url").startsWith("http")) {
+                    if (country != null && matches(query, "$title $description") && isSafeHttpsUrl(item.optString("url"))) {
                         found += JobListing(
                             id = stableId("Arbeitnow", item.optString("url")),
                             title = title.ifBlank { "Untitled" },
@@ -72,7 +72,7 @@ class JobSourceClient(
                 val country = countryFromLocation(location, countries)
                 val remoteWorldwide = location.contains("worldwide", true) || location.equals("anywhere", true)
                 val url = item.optString("url")
-                if ((!remoteWorldwide && country == null) || !url.startsWith("http")) return@mapNotNull null
+                if ((!remoteWorldwide && country == null) || !isSafeHttpsUrl(url)) return@mapNotNull null
                 JobListing(
                     id = stableId("Remotive", url), title = title, company = item.optString("company_name"),
                     location = location, country = country ?: "Remote",
@@ -118,7 +118,7 @@ class JobSourceClient(
                 val expiry = item.optLong("expiryDate", Long.MAX_VALUE)
                 if (expiry > 0L && expiry != Long.MAX_VALUE && expiry <= System.currentTimeMillis() / 1000L) return@mapNotNull null
                 val applicationLink = item.optString("applicationLink")
-                if (!applicationLink.startsWith("https://") || !matches(query, "$title $description")) return@mapNotNull null
+                if (!isSafeHttpsUrl(applicationLink) || !matches(query, "$title $description")) return@mapNotNull null
                 val guid = item.optString("guid").ifBlank { applicationLink }
                 val companySlug = item.optString("companySlug")
                 val safeSlug = companySlug.matches(Regex("[A-Za-z0-9_-]{1,100}")) && guid.matches(Regex("[A-Za-z0-9_-]{1,180}"))
@@ -179,7 +179,7 @@ class JobSourceClient(
                 val country = countryFromLocation(location, countries)
                 if (!worldwide && country == null) return@mapNotNull null
                 val url = item.optString("url")
-                if (!url.startsWith("https://") || !matches(query, "$title $description")) return@mapNotNull null
+                if (!isSafeHttpsUrl(url) || !matches(query, "$title $description")) return@mapNotNull null
                 val tags = item.optJSONArray("jobIndustry")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
                 val id = item.optString("id").ifBlank { url }
                 JobListing(
@@ -217,7 +217,7 @@ class JobSourceClient(
                     val country = countryFromLocation(location, countries) ?: continue
                     val description = item.optString("content")
                     val url = item.optString("absolute_url")
-                    if (url.startsWith("https://") && matches(query, "$title $description")) {
+                    if (isSafeHttpsUrl(url) && matches(query, "$title $description")) {
                         found += JobListing(
                             id = stableId("Greenhouse", url), title = title,
                             company = token, location = location, country = country,
@@ -247,7 +247,7 @@ class JobSourceClient(
                     val title = item.optString("text")
                     val categories = item.optJSONObject("categories")
                     val location = categories?.optString("location").orEmpty()
-                    val country = countries.firstOrNull { location.contains(it, true) } ?: continue
+                    val country = countryFromLocation(location, countries) ?: continue
                     val description = item.optString("descriptionPlain").ifBlank { item.optString("description") }
                     val url = item.optString("hostedUrl").ifBlank { item.optString("applyUrl") }
                     if (url.startsWith("https://") && matches(query, "$title $description")) {
@@ -293,11 +293,33 @@ class JobSourceClient(
             "uae" to listOf("uae", "united arab emirates", "dubai", "abu dhabi"),
             "saudi arabia" to listOf("saudi arabia", "riyadh", "jeddah", "dammam")
         )
-        val normalized = location.lowercase()
+        val selectedAliases = mapOf(
+            "au" to "australia", "aus" to "australia",
+            "uk" to "united kingdom", "gb" to "united kingdom",
+            "nz" to "new zealand",
+            "de" to "germany",
+            "ca" to "canada",
+            "ae" to "uae", "uae" to "uae",
+            "sa" to "saudi arabia"
+        )
         return countries.firstOrNull { selected ->
-            val candidates = aliases[selected.lowercase()] ?: listOf(selected.lowercase())
-            candidates.any { alias -> normalized.contains(alias) }
+            val key = selected.trim().lowercase()
+            val canonical = selectedAliases[key] ?: key
+            val candidates = aliases[canonical] ?: listOf(selected.trim())
+            candidates.any { alias ->
+                Regex("(?<![a-z])" + Regex.escape(alias) + "(?![a-z])", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(location)
+            }
         }
+    }
+
+    private fun isSafeHttpsUrl(value: String): Boolean = try {
+        val uri = java.net.URI(value.trim())
+        uri.scheme.equals("https", ignoreCase = true) &&
+            !uri.host.isNullOrBlank() &&
+            uri.userInfo == null
+    } catch (_: Exception) {
+        false
     }
 
     private fun readBodyLimited(body: ResponseBody, maxBytes: Int = 8 * 1024 * 1024): String {
@@ -316,9 +338,10 @@ class JobSourceClient(
         return output.toString(Charsets.UTF_8.name())
     }
 
-    private fun matches(query: String, haystack: String): Boolean =
-        query.isBlank() || query.trim().split(Regex("\\s+")).filter { it.length > 2 }
-            .any { haystack.contains(it, true) }
+    private fun matches(query: String, haystack: String): Boolean {
+        val terms = query.trim().split(Regex("\\s+")).filter { it.length > 2 }
+        return terms.isEmpty() || terms.all { haystack.contains(it, ignoreCase = true) }
+    }
 
     private fun stableId(source: String, url: String): String =
         MessageDigest.getInstance("SHA-256").digest("$source|$url".toByteArray())
