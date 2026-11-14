@@ -36,7 +36,6 @@ object ApplicationPdfGenerator {
                 val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                     color = 0xFF8A6A2D.toInt()
                     textSize = 8f
-                    letterSpacing = 0.8f
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 }
                 val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
