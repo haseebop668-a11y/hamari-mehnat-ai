@@ -13,6 +13,7 @@ import java.util.concurrent.TimeUnit
 enum class NzEmployerLookupStatus {
     ACCREDITED_NZBN_MATCH,
     EXPIRED_NZBN_MATCH,
+    EXACT_NZBN_MATCH_EXPIRY_UNKNOWN,
     EXACT_NAME_MATCH_REQUIRES_NZBN_CONFIRMATION,
     NO_PUBLIC_MATCH_INCONCLUSIVE,
     LOOKUP_FAILED
@@ -79,6 +80,18 @@ class NzEmployerVerificationClient(
             http.newCall(request).execute().use { response ->
                 val responseText = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
+                    val noResults = response.code == 400 && runCatching {
+                        val errorBody = JSONObject(responseText)
+                        errorBody.optString("Title") == "No Results" &&
+                            errorBody.optString("Message").trimStart().startsWith("Your search found no results.")
+                    }.getOrDefault(false)
+                    if (noResults) {
+                        return NzEmployerLookupResult(
+                            normalizedQuery, NzEmployerLookupStatus.NO_PUBLIC_MATCH_INCONCLUSIVE,
+                            emptyList(), now, OFFICIAL_SEARCH_URL,
+                            "INZ returned no published match. This is not proof that the employer is unaccredited; some employers opt out of public search."
+                        )
+                    }
                     return failure(normalizedQuery, now, "INZ search returned HTTP ${response.code}.", "HTTP ${response.code}")
                 }
                 val root = JSONObject(responseText)
@@ -119,10 +132,10 @@ class NzEmployerVerificationClient(
                 val status = when {
                     exactNzbn -> {
                         val match = employers.first { it.nzbn == normalizedQuery }
-                        if (match.accreditationExpiryDate?.isBefore(clock()) == true) {
-                            NzEmployerLookupStatus.EXPIRED_NZBN_MATCH
-                        } else {
-                            NzEmployerLookupStatus.ACCREDITED_NZBN_MATCH
+                        when {
+                            match.accreditationExpiryDate == null -> NzEmployerLookupStatus.EXACT_NZBN_MATCH_EXPIRY_UNKNOWN
+                            match.accreditationExpiryDate.isBefore(clock()) -> NzEmployerLookupStatus.EXPIRED_NZBN_MATCH
+                            else -> NzEmployerLookupStatus.ACCREDITED_NZBN_MATCH
                         }
                     }
                     exactNameMatches.size == 1 -> NzEmployerLookupStatus.EXACT_NAME_MATCH_REQUIRES_NZBN_CONFIRMATION
@@ -134,6 +147,8 @@ class NzEmployerVerificationClient(
                         "Exact NZBN match found in the public INZ accredited-employer search. Recheck the official page before relying on it; this does not approve a particular vacancy."
                     NzEmployerLookupStatus.EXPIRED_NZBN_MATCH ->
                         "Exact NZBN match found, but the published accreditation expiry date has passed. Do not treat this employer as currently accredited."
+                    NzEmployerLookupStatus.EXACT_NZBN_MATCH_EXPIRY_UNKNOWN ->
+                        "Exact NZBN match found, but no expiry date was returned. Current accreditation cannot be confirmed from this response."
                     NzEmployerLookupStatus.EXACT_NAME_MATCH_REQUIRES_NZBN_CONFIRMATION ->
                         "Name result(s) found. Confirm the legal entity and 13-digit NZBN with the employer before treating this as a match."
                     NzEmployerLookupStatus.NO_PUBLIC_MATCH_INCONCLUSIVE ->
