@@ -15,7 +15,7 @@ A private, single-owner Android application for international job discovery and 
 - **Profile:** encrypted owner profile with target roles, countries, skills and experience summary.
 - **Document vault:** PDF, DOCX, TXT and image import into app-private AES-GCM encrypted files. PDF/DOCX/TXT text extraction is local. Scanned-PDF/image OCR is not enabled.
 - **Application PDF export:** local CV-tailoring and cover-letter drafts can be exported to a user-selected PDF location after review.
-- **Job discovery:** Arbeitnow, Remotive, Himalayas, Jobicy, Greenhouse public company boards and Lever public company boards. LinkedIn, Indeed, SEEK and EURES are browser hand-off links; login-protected pages are not scraped.
+- **Job discovery:** Arbeitnow, Remotive, Himalayas, Jobicy, optional Adzuna country API, Greenhouse public company boards and Lever public company boards. LinkedIn, Indeed, SEEK and EURES are browser hand-off links; login-protected pages are not scraped.
 - **Source compliance:** rate limits for public APIs, direct source/application URLs, source attribution, expiry filtering for Himalayas listings and no onward job-feed redistribution.
 - **Matching:** deterministic role/skill/country relevance scoring with cautious sponsorship wording, NZ trade-role synonyms, expired-listing filtering and stable-ID deduplication. A sponsorship signal is not a guarantee of sponsorship or visa eligibility.
 - **Local specialist agents:** CV analyst, job-match analyst, CV tailoring, cover-letter drafting, employer outreach drafting, interview coaching and official-source visa explanation. These are prompt-specialized workflows using one local model; the app does not claim to train a foundation model from personal documents.
@@ -42,6 +42,7 @@ Country-specific sponsorship wording is triage only. Employer accreditation/lice
 - Remotive listings are delayed by 24 hours; the app caps its public API use at four requests per UTC day and enforces a six-hour interval.
 - Himalayas job data is refreshed daily; the app limits requests to one per UTC day, retains source attribution and uses the API-provided applicationLink for the application action.
 - Jobicy public API use is limited to four requests per day with at least one hour between calls.
+- Adzuna is an optional country-specific API for Australia, New Zealand, UK, Germany and Canada. The user obtains an app ID/key from the official developer portal; the app stores them encrypted with Android Keystore. The app applies a conservative local cap of 10 country-search requests per UTC day. Use is intended for personal job search; provider quotas and terms can change.
 - Greenhouse and Lever endpoints are company-board-specific. Enter board IDs/site names in the Jobs tab; they are not global job-search APIs.
 - LinkedIn, Indeed and SEEK do not provide an unrestricted public API for all logged-in listings. The app opens their official search pages in a browser rather than bypassing access controls.
 - For New Zealand, SEEK NZ, Tradestaff, Trade Assist and Enterprise Recruitment are browser hand-off sources. They are not represented as live API integrations.
