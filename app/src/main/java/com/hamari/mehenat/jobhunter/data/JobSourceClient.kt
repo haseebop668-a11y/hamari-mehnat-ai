@@ -4,6 +4,7 @@ import com.hamari.mehenat.jobhunter.domain.JobListing
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.ResponseBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -22,7 +23,8 @@ class JobSourceClient(
     private val leverBaseUrl: String = "https://api.lever.co/v0/postings",
     private val himalayasBaseUrl: String = "https://himalayas.app/jobs/api/search",
     private val himalayasVerificationBaseUrl: String = "https://himalayas.app/jobs/api/companies",
-    private val jobicyBaseUrl: String = "https://jobicy.com/api/v2/remote-jobs"
+    private val jobicyBaseUrl: String = "https://jobicy.com/api/v2/remote-jobs",
+    private val adzunaBaseUrl: String = "https://api.adzuna.com/v1/api"
 ) {
     fun searchArbeitnow(query: String, countries: List<String>, maxPages: Int = 3): SourceResult {
         val found = mutableListOf<JobListing>()
@@ -199,6 +201,71 @@ class JobSourceClient(
         } catch (e: Exception) {
             SourceResult("Jobicy", emptyList(), e.javaClass.simpleName)
         }
+    }
+
+
+    fun searchAdzuna(
+        query: String,
+        countries: List<String>,
+        appId: String,
+        appKey: String,
+        limitPerCountry: Int = 20
+    ): SourceResult {
+        if (appId.isBlank() || appKey.isBlank()) {
+            return SourceResult("Adzuna", emptyList(), "Adzuna credentials are not configured.")
+        }
+        val countryCodes = mapOf(
+            "australia" to "au", "au" to "au",
+            "united kingdom" to "gb", "uk" to "gb", "gb" to "gb",
+            "new zealand" to "nz", "nz" to "nz",
+            "germany" to "de", "de" to "de",
+            "canada" to "ca", "ca" to "ca"
+        )
+        val found = mutableListOf<JobListing>()
+        val errors = mutableListOf<String>()
+        countries.distinct().take(5).forEach { selectedCountry ->
+            val code = countryCodes[selectedCountry.trim().lowercase()]
+            if (code == null) {
+                errors += "$selectedCountry: Adzuna country code is not configured."
+                return@forEach
+            }
+            try {
+                val url = "$adzunaBaseUrl/jobs/$code/search/1".toHttpUrl().newBuilder()
+                    .addQueryParameter("app_id", appId.trim())
+                    .addQueryParameter("app_key", appKey.trim())
+                    .addQueryParameter("results_per_page", limitPerCountry.coerceIn(1, 50).toString())
+                    .addQueryParameter("what", query.trim())
+                    .addQueryParameter("content-type", "application/json")
+                    .build()
+                val json = getJson(url.toString())
+                val results = json.optJSONArray("results") ?: org.json.JSONArray()
+                for (i in 0 until results.length()) {
+                    val item = results.optJSONObject(i) ?: continue
+                    val title = item.optString("title")
+                    val description = item.optString("description")
+                    val company = item.optJSONObject("company")?.optString("display_name").orEmpty()
+                    val location = item.optJSONObject("location")?.optString("display_name").orEmpty()
+                    val applyUrl = item.optString("redirect_url")
+                    if (!isSafeHttpsUrl(applyUrl) || !matches(query, "$title $description")) continue
+                    val category = item.optJSONObject("category")?.optString("label").orEmpty()
+                    found += JobListing(
+                        id = stableId("Adzuna", applyUrl),
+                        title = title.ifBlank { "Untitled" },
+                        company = company.ifBlank { "Not specified" },
+                        location = location.ifBlank { selectedCountry },
+                        country = selectedCountry,
+                        description = stripHtml(description).take(12000),
+                        tags = listOf(category).filter(String::isNotBlank),
+                        sourceUrl = applyUrl,
+                        sourceName = "Adzuna",
+                        retrievedAtEpochMs = System.currentTimeMillis()
+                    )
+                }
+            } catch (e: Exception) {
+                errors += "$selectedCountry: " + e.javaClass.simpleName + ": " + (e.message ?: "request failed")
+            }
+        }
+        return SourceResult("Adzuna", found.distinctBy { it.id }, errors.takeIf { it.isNotEmpty() }?.joinToString())
     }
 
     fun searchGreenhouse(query: String, countries: List<String>, boardTokens: List<String>): SourceResult {
