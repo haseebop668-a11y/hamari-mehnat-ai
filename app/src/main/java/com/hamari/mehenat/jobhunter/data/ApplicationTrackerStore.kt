@@ -49,10 +49,10 @@ class ApplicationTrackerStore(context: Context) :
         }
         rows.forEach { row ->
             val values = ContentValues().apply {
-                put("title", cipher.encrypt(row[1]))
-                put("company", cipher.encrypt(row[2]))
-                put("source_url", cipher.encrypt(row[3]))
-                put("notes", cipher.encrypt(row[4]))
+                put("title", cipher.encryptIfNeeded(row[1]))
+                put("company", cipher.encryptIfNeeded(row[2]))
+                put("source_url", cipher.encryptIfNeeded(row[3]))
+                put("notes", cipher.encryptIfNeeded(row[4]))
             }
             db.update("applications", values, "id = ?", arrayOf(row[0]))
         }
