@@ -49,6 +49,7 @@ import com.hamari.mehenat.jobhunter.domain.ContractFindingSeverity
 import com.hamari.mehenat.jobhunter.domain.JobListing
 import com.hamari.mehenat.jobhunter.domain.JobMatcher
 import com.hamari.mehenat.jobhunter.domain.JobProfile
+import com.hamari.mehenat.jobhunter.domain.JobFreshnessService
 import com.hamari.mehenat.jobhunter.domain.SponsorshipSignal
 import org.json.JSONArray
 import kotlinx.coroutines.Dispatchers
@@ -103,7 +104,7 @@ fun JobsScreen(context: Context) {
                                 leverSites = leverSites.split(",").map { it.trim() }.filter { it.isNotBlank() }
                             )
                         }
-                        results = sourceResults.flatMap { it.jobs }.distinctBy { it.id }
+                        results = JobFreshnessService.removeExpired(sourceResults.flatMap { it.jobs })
                         val failures = sourceResults.filter { it.error != null }.joinToString { "${it.source}: ${it.error}" }
                         status = if (failures.isBlank()) {
                             "Search completed. ${results.size} vacancies retrieved from ${sourceResults.size} public sources."
