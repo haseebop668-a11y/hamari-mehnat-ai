@@ -21,7 +21,9 @@ class EncryptedDocumentVault(context: Context) {
     private val alias = "hamari_mehnat_vault_key"
 
     fun importDocument(uri: Uri, displayName: String, mimeType: String): VaultDocument {
-        require(displayName.isNotBlank()) { "Document name is required" }
+        val safeName = displayName.replace(Regex("[\\r\\n\\u0000-\\u001F]"), " ").trim().take(180)
+        val safeMime = mimeType.replace(Regex("[\\r\\n\\u0000-\\u001F]"), "").trim().take(120)
+        require(safeName.isNotBlank()) { "Document name is required" }
         val raw = resolver.openInputStream(uri)?.use { input ->
             val output = java.io.ByteArrayOutputStream()
             val buffer = ByteArray(8192)
@@ -37,17 +39,21 @@ class EncryptedDocumentVault(context: Context) {
         } ?: error("Cannot open selected document")
         require(raw.isNotEmpty()) { "Selected document is empty" }
         val id = UUID.randomUUID().toString()
-        val metadata = "$displayName\n$mimeType\n".toByteArray(Charsets.UTF_8)
+        val metadata = "$safeName\n$safeMime\n".toByteArray(Charsets.UTF_8)
         val payload = metadata + raw
         val encrypted = encrypt(payload)
         val temporary = File(directory, "$id.vault.part")
-        java.io.FileOutputStream(temporary).use { output ->
-            output.write(encrypted)
-            output.fd.sync()
-        }
         val destination = File(directory, "$id.vault")
-        check(temporary.renameTo(destination)) { "Could not finalize encrypted document." }
-        return VaultDocument(id, displayName, mimeType, raw.size.toLong())
+        try {
+            java.io.FileOutputStream(temporary).use { output ->
+                output.write(encrypted)
+                output.fd.sync()
+            }
+            check(temporary.renameTo(destination)) { "Could not finalize encrypted document." }
+        } finally {
+            if (temporary.exists()) temporary.delete()
+        }
+        return VaultDocument(id, safeName, safeMime, raw.size.toLong())
     }
 
     fun read(documentId: String): ByteArray = readDocument(documentId).bytes
