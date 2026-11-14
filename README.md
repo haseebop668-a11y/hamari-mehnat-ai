@@ -17,7 +17,7 @@ A private, single-owner Android application for international job discovery and 
 - **Application PDF export:** local CV-tailoring and cover-letter drafts can be exported to a user-selected PDF location after review.
 - **Job discovery:** Arbeitnow, Remotive, Himalayas, Jobicy, Greenhouse public company boards and Lever public company boards. LinkedIn, Indeed, SEEK and EURES are browser hand-off links; login-protected pages are not scraped.
 - **Source compliance:** rate limits for public APIs, direct source/application URLs, source attribution, expiry filtering for Himalayas listings and no onward job-feed redistribution.
-- **Matching:** deterministic role/skill/country relevance scoring with cautious sponsorship wording. A sponsorship signal is not a guarantee of sponsorship or visa eligibility.
+- **Matching:** deterministic role/skill/country relevance scoring with cautious sponsorship wording, NZ trade-role synonyms, expired-listing filtering and stable-ID deduplication. A sponsorship signal is not a guarantee of sponsorship or visa eligibility.
 - **Local specialist agents:** CV analyst, job-match analyst, CV tailoring, cover-letter drafting, employer outreach drafting, interview coaching and official-source visa explanation. These are prompt-specialized workflows using one local model; the app does not claim to train a foundation model from personal documents.
 - **Employer outreach:** browser-based employer research and user-reviewed email drafts opened in the user's email app. The app does not send automatically or read the user's inbox.
 - **Tracker:** saved jobs, application stages, employer contact/response notes and local interview history.
