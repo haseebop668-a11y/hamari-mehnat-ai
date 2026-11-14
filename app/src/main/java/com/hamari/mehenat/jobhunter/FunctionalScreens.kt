@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hamari.mehenat.jobhunter.data.EncryptedDocumentVault
@@ -60,9 +61,9 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-private val ScreenGold = Color(0xFFD6B36A)
-private val ScreenMuted = Color(0xFF9AA4B2)
-private val ScreenPanel = Color(0xFF191F27)
+private val ScreenGold = FieldbookPalette.Rust
+private val ScreenMuted = FieldbookPalette.Muted
+private val ScreenPanel = FieldbookPalette.Paper
 
 @Composable
 fun JobsScreen(context: Context) {
@@ -81,7 +82,8 @@ fun JobsScreen(context: Context) {
     val scope = rememberCoroutineScope()
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Job discovery", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+        Text("OPPORTUNITY SEARCH", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text("Find your next role", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
         Text("Public feeds only. No LinkedIn/Indeed login scraping or access-control bypass. Remotive listings are delayed 24 hours and its free API is capped at 4 calls/day; always verify the employer's live listing.", color = ScreenMuted, fontSize = 12.sp)
         OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Role / keywords") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(value = countries, onValueChange = { countries = it }, label = { Text("Target countries (comma separated)") }, modifier = Modifier.fillMaxWidth())
@@ -156,7 +158,7 @@ fun JobsScreen(context: Context) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = ScreenPanel),
-                border = BorderStroke(1.dp, Color(0xFF303945))
+                border = BorderStroke(1.dp, FieldbookPalette.Rule)
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(job.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
@@ -219,7 +221,7 @@ fun JobsScreen(context: Context) {
                 }
             }
         }
-        HorizontalDivider(color = Color(0xFF303945))
+        HorizontalDivider(color = FieldbookPalette.Rule)
         Text("OFFICIAL VISA RESEARCH", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         OutlinedTextField(value = visaCountry, onValueChange = { visaCountry = it }, label = { Text("Country") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Button(
@@ -273,7 +275,7 @@ fun JobsScreen(context: Context) {
                 }
             }
         }
-        HorizontalDivider(color = Color(0xFF303945))
+        HorizontalDivider(color = FieldbookPalette.Rule)
         Text("OFFICIAL VISA & SPONSORSHIP SOURCES", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         Text("Government sources only • links last checked 5 Nov 2026. Always open the current source; this app does not decide visa eligibility.", color = ScreenMuted, fontSize = 11.sp)
         OfficialVisaSources.sources.forEach { source ->
@@ -289,7 +291,7 @@ fun JobsScreen(context: Context) {
                 }
             }
         }
-        HorizontalDivider(color = Color(0xFF303945))
+        HorizontalDivider(color = FieldbookPalette.Rule)
         NzVerificationPanel(context)
     }
 }
@@ -379,7 +381,7 @@ private fun NzVerificationPanel(context: Context) {
             modifier = Modifier.fillMaxWidth()
         ) { Text("Open INZ job-check process") }
 
-        HorizontalDivider(color = Color(0xFF303945))
+        HorizontalDivider(color = FieldbookPalette.Rule)
         Text("EMPLOYMENT AGREEMENT TEXT REVIEW", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         Text("Paste readable contract text below. This first-pass checklist flags missing terms and risk wording; it is not legal advice.", color = ScreenMuted, fontSize = 11.sp)
         OutlinedTextField(
@@ -434,7 +436,7 @@ private fun NzVerificationPanel(context: Context) {
         contractReport?.let { report ->
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ScreenPanel)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(report.summary, color = if (report.hasHighRiskFlags) Color(0xFFE7A08B) else ScreenGold, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Text(report.summary, color = if (report.hasHighRiskFlags) FieldbookPalette.Danger else ScreenGold, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                     Text(
                         "Detected hours: ${report.detectedWeeklyHours?.let { "$it/week" } ?: "Not detected"} • Hourly pay: ${report.detectedHourlyPayNzd?.let { "NZD $it" } ?: "Not detected"}",
                         color = ScreenMuted, fontSize = 11.sp
@@ -443,7 +445,7 @@ private fun NzVerificationPanel(context: Context) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
                                 "${if (finding.severity == ContractFindingSeverity.HIGH_RISK) "⚠ " else "• "}${finding.title}",
-                                color = if (finding.severity == ContractFindingSeverity.HIGH_RISK) Color(0xFFE7A08B) else ScreenGold,
+                                color = if (finding.severity == ContractFindingSeverity.HIGH_RISK) FieldbookPalette.Danger else ScreenGold,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 12.sp
                             )
@@ -505,7 +507,8 @@ fun FilesScreen(context: Context) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Private document vault", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+        Text("DOCUMENT ARCHIVE", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text("Your private vault", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
         Text("CVs, certificates, licenses and identity documents stay on this phone. Files are encrypted before writing to app storage.", color = ScreenMuted, fontSize = 12.sp)
         Button(onClick = {
             picker.launch(arrayOf("application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "image/*"))
@@ -597,11 +600,11 @@ fun FilesScreen(context: Context) {
                 extractedContractReport?.let { report ->
                     Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Text(report.summary, color = if (report.hasHighRiskFlags) Color(0xFFE7A08B) else ScreenGold, fontWeight = FontWeight.SemiBold)
+                            Text(report.summary, color = if (report.hasHighRiskFlags) FieldbookPalette.Danger else ScreenGold, fontWeight = FontWeight.SemiBold)
                             report.findings.forEach { finding ->
                                 Text(
                                     "${finding.title}: ${finding.detail}",
-                                    color = if (finding.severity == ContractFindingSeverity.HIGH_RISK) Color(0xFFE7A08B) else ScreenMuted,
+                                    color = if (finding.severity == ContractFindingSeverity.HIGH_RISK) FieldbookPalette.Danger else ScreenMuted,
                                     fontSize = 10.sp
                                 )
                             }
@@ -631,7 +634,8 @@ fun TrackerScreen(context: Context) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Application tracker", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+        Text("APPLICATION JOURNAL", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text("Keep every move in view", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
         Text("Saved jobs are stored locally. Change each stage as you progress.", color = ScreenMuted, fontSize = 12.sp)
         if (entries.isEmpty()) Text("No saved vacancies yet. Save a job from the Jobs tab.", color = ScreenMuted)
         entries.forEach { item ->
@@ -663,7 +667,7 @@ fun TrackerScreen(context: Context) {
                 }
             }
         }
-        HorizontalDivider(color = Color(0xFF303945))
+        HorizontalDivider(color = FieldbookPalette.Rule)
         Text("INTERVIEW PLANNER", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         OutlinedTextField(value = company, onValueChange = { company = it }, label = { Text("Company") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(value = role, onValueChange = { role = it }, label = { Text("Role") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -746,7 +750,8 @@ fun LocalAiScreen(context: Context) {
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("On-device AI", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+        Text("ON-DEVICE STUDIO", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text("Your private assistant", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
         Text("Local model runtime is the required V1 path. No cloud AI provider will receive your CV.", color = ScreenMuted, fontSize = 12.sp)
         Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -800,7 +805,7 @@ fun LocalAiScreen(context: Context) {
                     Text("Local inference test", color = ScreenGold, fontWeight = FontWeight.SemiBold)
                     Text(response, color = ScreenMuted, fontSize = 13.sp)
                 }
-                HorizontalDivider(color = Color(0xFF303945))
+                HorizontalDivider(color = FieldbookPalette.Rule)
                 Text("LOCAL SPECIALIST AGENTS", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 Box {
                     OutlinedButton(onClick = { agentMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
