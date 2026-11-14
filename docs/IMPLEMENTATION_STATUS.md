@@ -46,13 +46,23 @@ This document separates source implementation, automated verification, and real-
 
 ### Implemented
 - Native Android Kotlin / Jetpack Compose UI with Home, Jobs, Files, Tracker and Local AI navigation.
-- Dark visual theme with gold accents, private profile, document management, job search, application tracking and interview reminders.
+- Original Fieldbook visual identity: warm paper surfaces, forest-green primary palette, restrained terracotta accents, serif editorial headings, passport masthead and custom bottom dock.
+- Consistent visual language across all five screens while retaining the existing job, vault, tracker and local-agent workflows.
 - UI status distinguishes an integrated local AI runtime from a model that has actually been downloaded.
 - Deprecated Compose divider calls replaced with current `HorizontalDivider` API.
 - GitHub Actions builds ARM64 debug and minified release variants, runs unit tests and public endpoint smoke checks, and uploads the installable debug APK.
 - CI smoke checks are gating: a failed public endpoint/model metadata check fails the workflow rather than being silently ignored.
 
-### Automated verification — latest Phase 1/2/3 head
+### API audit and fixes in progress
+- Job source links now require a valid HTTPS URL with a host and no embedded user-info.
+- Keyword matching now requires every meaningful query token, reducing broad OR-match false positives.
+- Lever and other adapters share country alias matching, including AU/UK/NZ/DE/CA codes and boundary-aware region aliases.
+- Official visa page extraction rejects responses above 2 MB rather than silently analysing a truncated page.
+- Regression tests cover all-token matching, ISO country aliases, insecure link rejection and oversized official-source pages.
+- Android CI concurrency now groups push and pull-request runs by the same head branch to avoid duplicate builds.
+- Outstanding API scope decision: repository currently has Android-side public API clients, not a dedicated REST backend. Country-specific official job-board API coverage is incomplete where providers require credentials or expose no public API. Browser hand-offs remain explicitly labelled as such.
+
+### Automated verification — latest previously verified baseline
 - Previously verified source commit: `6faeebe311ad42fec30fb7bb539927b1cec13ee3`.
 - GitHub Actions run: https://github.com/haseebop668-a11y/hamari-mehnat-ai/actions/runs/43603338348.
 - Result: successful.
