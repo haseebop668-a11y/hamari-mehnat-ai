@@ -78,7 +78,7 @@ class NzEmployerVerificationClient(
                 .build()
 
             http.newCall(request).execute().use { response ->
-                val responseText = response.body?.string().orEmpty()
+                val responseText = response.body?.let(::readBodyLimited).orEmpty()
                 if (!response.isSuccessful) {
                     val noResults = response.code == 400 && runCatching {
                         val errorBody = JSONObject(responseText)
@@ -138,9 +138,8 @@ class NzEmployerVerificationClient(
                             else -> NzEmployerLookupStatus.ACCREDITED_NZBN_MATCH
                         }
                     }
-                    exactNameMatches.size == 1 -> NzEmployerLookupStatus.EXACT_NAME_MATCH_REQUIRES_NZBN_CONFIRMATION
-                    employers.isEmpty() -> NzEmployerLookupStatus.NO_PUBLIC_MATCH_INCONCLUSIVE
-                    else -> NzEmployerLookupStatus.EXACT_NAME_MATCH_REQUIRES_NZBN_CONFIRMATION
+                    exactNameMatches.isNotEmpty() -> NzEmployerLookupStatus.EXACT_NAME_MATCH_REQUIRES_NZBN_CONFIRMATION
+                    else -> NzEmployerLookupStatus.NO_PUBLIC_MATCH_INCONCLUSIVE
                 }
                 val message = when (status) {
                     NzEmployerLookupStatus.ACCREDITED_NZBN_MATCH ->
@@ -164,6 +163,27 @@ class NzEmployerVerificationClient(
         }
     }
 
+    private fun readBodyLimited(body: okhttp3.ResponseBody): String {
+        require(body.contentLength() < 0L || body.contentLength() <= MAX_RESPONSE_BYTES) {
+            "INZ employer response exceeds the 1 MB safety limit."
+        }
+        val output = java.io.ByteArrayOutputStream()
+        body.byteStream().use { input ->
+            val buffer = ByteArray(8192)
+            var total = 0
+            while (total <= MAX_RESPONSE_BYTES) {
+                val count = input.read(buffer, 0, minOf(buffer.size, MAX_RESPONSE_BYTES + 1 - total))
+                if (count < 0) break
+                output.write(buffer, 0, count)
+                total += count
+            }
+            require(total <= MAX_RESPONSE_BYTES) {
+                "INZ employer response exceeds the 1 MB safety limit."
+            }
+        }
+        return output.toString(Charsets.UTF_8.name())
+    }
+
     private fun failure(query: String, now: Long, message: String, error: String? = null) =
         NzEmployerLookupResult(query, NzEmployerLookupStatus.LOOKUP_FAILED, emptyList(), now, OFFICIAL_SEARCH_URL, message, error)
 
@@ -180,6 +200,7 @@ class NzEmployerVerificationClient(
 
     companion object {
         const val OFFICIAL_SEARCH_URL = "https://www.immigration.govt.nz/work/requirements-for-work-visas/approved-employers/accredited-employer-list/"
+        private const val MAX_RESPONSE_BYTES = 1024 * 1024
         private const val SEARCH_ENDPOINT = "https://www.immigration.govt.nz/list-api/getAPIResults/"
     }
 }
