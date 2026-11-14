@@ -30,6 +30,7 @@ class EmploymentContractAnalyzer {
         contractText: String,
         expectedEmployerName: String? = null,
         expectedJobTitle: String? = null,
+        expectedWorkLocation: String? = null,
         advertisedHourlyPayNzd: Double? = null
     ): EmploymentContractReport {
         val text = contractText.trim()
@@ -114,6 +115,9 @@ class EmploymentContractAnalyzer {
         }
         if (!expectedJobTitle.isNullOrBlank() && !normalized.contains(expectedJobTitle.lowercase(Locale.ROOT))) {
             findings += ContractFinding("job_title_mismatch", "Job title mismatch", "The expected job title was not found in the contract text. Compare the signed agreement, job description and job-check role.", ContractFindingSeverity.HIGH_RISK, ContractCheckStatus.FLAGGED)
+        }
+        if (!expectedWorkLocation.isNullOrBlank() && !normalizeForMatch(normalized).contains(normalizeForMatch(expectedWorkLocation))) {
+            findings += ContractFinding("work_location_mismatch", "Work location mismatch", "The expected work location was not found in the contract text. Compare the advertised location, job-check location and signed agreement.", ContractFindingSeverity.HIGH_RISK, ContractCheckStatus.FLAGGED)
         }
         findings += ContractFinding("signed_job_offer", "Signed job offer evidence", "A separate signed job offer is required for an AEWV application. Confirm you have the signed offer and that its employer, role, location, pay and hours match this agreement.", ContractFindingSeverity.WARNING, ContractCheckStatus.REVIEW_REQUIRED)
         findings += ContractFinding("job_check_status", "Specific job-check approval", "A contract cannot prove that this exact role, location and conditions have an approved INZ job check. Request the employer's job-check evidence and confirm with INZ.", ContractFindingSeverity.WARNING, ContractCheckStatus.REVIEW_REQUIRED)
