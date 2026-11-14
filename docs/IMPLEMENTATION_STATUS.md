@@ -8,13 +8,14 @@ This document separates source implementation, automated verification, and real-
 
 ### Implemented
 - Country registry for New Zealand, Australia, United Kingdom, Germany and Canada.
-- Public job-feed adapters: Arbeitnow, Remotive, Himalayas and Jobicy; optional company-specific Greenhouse and Lever boards.
+- Public job-feed adapters: Arbeitnow, Remotive, Himalayas and Jobicy; optional Adzuna country API; optional company-specific Greenhouse and Lever boards.
 - Vacancy freshness filtering and stable-ID deduplication before display and scheduled saving.
 - Browser hand-off links for SEEK NZ, Tradestaff, Trade Assist and Enterprise Recruitment; these are not represented as API integrations.
 - New Zealand public accredited-employer lookup, exact 13-digit NZBN matching, accreditation expiry parsing, checked timestamp and official-source link.
 - Conservative no-result handling: absence from the public list is inconclusive because some employers opt out of publication.
 - AEWV contract checklist covering identity, role, location, duties, hours, pay, leave, duration, trial-period wording, deductions, bonding/repayment, worker-paid fees, passport retention and mismatches against expected vacancy details.
 - Role synonyms for civil labour, roadworks, plant operation, painting, maintenance, logistics and scaffolding.
+- Optional Adzuna API for AU/NZ/UK/DE/CA, with app ID/key encrypted locally using Android Keystore and a conservative 10-country-request UTC daily app cap.
 - Unit tests for employer parsing, invalid NZBN, no-result handling, contract rules, freshness filtering, job matching and public source adapters.
 
 ### Verification boundaries
@@ -58,9 +59,13 @@ This document separates source implementation, automated verification, and real-
 - Keyword matching now requires every meaningful query token, reducing broad OR-match false positives.
 - Lever and other adapters share country alias matching, including AU/UK/NZ/DE/CA codes and boundary-aware region aliases.
 - Official visa page extraction rejects responses above 2 MB rather than silently analysing a truncated page.
+- INZ employer responses are capped at 1 MB; unrelated fuzzy search results are no longer labelled as exact name matches.
+- Expired vacancy cleanup now removes only records still in the `Saved` stage; progressed applications are preserved when a listing expires.
+- Adzuna request failures do not echo credential-bearing URL details.
 - Regression tests cover all-token matching, ISO country aliases, insecure link rejection and oversized official-source pages.
 - Android CI concurrency now groups push and pull-request runs by the same head branch to avoid duplicate builds.
-- Outstanding API scope decision: repository currently has Android-side public API clients, not a dedicated REST backend. Country-specific official job-board API coverage is incomplete where providers require credentials or expose no public API. Browser hand-offs remain explicitly labelled as such.
+- API architecture: Android-side public API clients only; no separate REST backend is deployed, consistent with the Android-only single-user scope. Adzuna is optional and requires the user to register for personal API credentials. Country-specific official job-board API coverage remains incomplete where providers require credentials or expose no public API. Browser hand-offs remain explicitly labelled as such.
+- Security limitation: application tracker and interview records are stored in app-private SQLite but are not database-level encrypted. Profile and imported document content are encrypted with Android Keystore AES-GCM. Do not describe all local records as encrypted.
 
 ### Automated verification — latest previously verified baseline
 - Previously verified source commit: `6faeebe311ad42fec30fb7bb539927b1cec13ee3`.
