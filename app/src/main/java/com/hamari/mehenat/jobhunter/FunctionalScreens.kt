@@ -219,7 +219,7 @@ fun JobsScreen(context: Context) {
                 }
             }
         }
-        Divider(color = Color(0xFF303945))
+        HorizontalDivider(color = Color(0xFF303945))
         Text("OFFICIAL VISA RESEARCH", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         OutlinedTextField(value = visaCountry, onValueChange = { visaCountry = it }, label = { Text("Country") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Button(
@@ -273,7 +273,7 @@ fun JobsScreen(context: Context) {
                 }
             }
         }
-        Divider(color = Color(0xFF303945))
+        HorizontalDivider(color = Color(0xFF303945))
         Text("OFFICIAL VISA & SPONSORSHIP SOURCES", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         Text("Government sources only • links last checked 5 Nov 2026. Always open the current source; this app does not decide visa eligibility.", color = ScreenMuted, fontSize = 11.sp)
         OfficialVisaSources.sources.forEach { source ->
@@ -289,7 +289,7 @@ fun JobsScreen(context: Context) {
                 }
             }
         }
-        Divider(color = Color(0xFF303945))
+        HorizontalDivider(color = Color(0xFF303945))
         NzVerificationPanel(context)
     }
 }
@@ -379,7 +379,7 @@ private fun NzVerificationPanel(context: Context) {
             modifier = Modifier.fillMaxWidth()
         ) { Text("Open INZ job-check process") }
 
-        Divider(color = Color(0xFF303945))
+        HorizontalDivider(color = Color(0xFF303945))
         Text("EMPLOYMENT AGREEMENT TEXT REVIEW", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         Text("Paste readable contract text below. This first-pass checklist flags missing terms and risk wording; it is not legal advice.", color = ScreenMuted, fontSize = 11.sp)
         OutlinedTextField(
@@ -663,7 +663,7 @@ fun TrackerScreen(context: Context) {
                 }
             }
         }
-        Divider(color = Color(0xFF303945))
+        HorizontalDivider(color = Color(0xFF303945))
         Text("INTERVIEW PLANNER", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         OutlinedTextField(value = company, onValueChange = { company = it }, label = { Text("Company") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(value = role, onValueChange = { role = it }, label = { Text("Role") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -800,7 +800,7 @@ fun LocalAiScreen(context: Context) {
                     Text("Local inference test", color = ScreenGold, fontWeight = FontWeight.SemiBold)
                     Text(response, color = ScreenMuted, fontSize = 13.sp)
                 }
-                Divider(color = Color(0xFF303945))
+                HorizontalDivider(color = Color(0xFF303945))
                 Text("LOCAL SPECIALIST AGENTS", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 Box {
                     OutlinedButton(onClick = { agentMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
