@@ -66,7 +66,7 @@ private val ScreenPanel = Color(0xFF191F27)
 @Composable
 fun JobsScreen(context: Context) {
     var query by remember { mutableStateOf("mechanic") }
-    var countries by remember { mutableStateOf("Australia, United Kingdom, Germany") }
+    var countries by remember { mutableStateOf("New Zealand, Australia, United Kingdom") }
     var greenhouseBoards by remember { mutableStateOf("") }
     var leverSites by remember { mutableStateOf("") }
     var results by remember { mutableStateOf<List<JobListing>>(emptyList()) }
