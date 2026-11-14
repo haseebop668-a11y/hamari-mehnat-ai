@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hamari.mehenat.jobhunter.data.EncryptedDocumentVault
+import com.hamari.mehenat.jobhunter.data.ApplicationPdfGenerator
 import com.hamari.mehenat.jobhunter.data.DocumentTextExtractor
 import com.hamari.mehenat.jobhunter.data.JobDiscoveryRepository
 import com.hamari.mehenat.jobhunter.data.JobSourceClient
@@ -632,10 +633,31 @@ fun LocalAiScreen(context: Context) {
     var agentEvidence by remember { mutableStateOf("") }
     var employerEmail by remember { mutableStateOf("") }
     var agentOutput by remember { mutableStateOf("") }
+    var pdfDraftToExport by remember { mutableStateOf("") }
+    var pdfExportTitle by remember { mutableStateOf("Application draft") }
+    var pdfExportStatus by remember { mutableStateOf("") }
     var selectedAgent by remember { mutableStateOf(PersonalAgent.CV_ANALYST) }
     var agentMenuOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val manager = remember(context) { LocalModelManager(context) }
+    val pdfExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri == null) {
+            pdfExportStatus = "PDF export cancelled."
+        } else {
+            val draft = pdfDraftToExport
+            val title = pdfExportTitle
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        ApplicationPdfGenerator.write(context, uri, title, draft)
+                    }
+                    pdfExportStatus = "PDF saved to the destination you selected. Review it before sending."
+                } catch (e: Exception) {
+                    pdfExportStatus = "PDF export failed: ${e.message ?: e.javaClass.simpleName}"
+                }
+            }
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("On-device AI", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
         Text("Local model runtime is the required V1 path. No cloud AI provider will receive your CV.", color = ScreenMuted, fontSize = 12.sp)
@@ -803,6 +825,22 @@ fun LocalAiScreen(context: Context) {
                                 }
                             }) { Text("Open email draft") }
                         }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            pdfDraftToExport = agentOutput
+                            pdfExportTitle = when (selectedAgent) {
+                                PersonalAgent.CV_TAILOR -> "Tailored CV"
+                                PersonalAgent.COVER_LETTER -> "Cover Letter"
+                                else -> "Application Draft"
+                            }
+                            val safeName = pdfExportTitle.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
+                            pdfExporter.launch("${safeName.ifBlank { "application_draft" }}.pdf")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Export reviewed draft as PDF") }
+                    if (pdfExportStatus.isNotBlank()) {
+                        Text(pdfExportStatus, color = ScreenMuted, fontSize = 11.sp)
                     }
                 }
                 TextButton(onClick = {
