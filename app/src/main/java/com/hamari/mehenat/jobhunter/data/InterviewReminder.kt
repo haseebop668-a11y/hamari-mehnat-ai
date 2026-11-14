@@ -108,6 +108,13 @@ class InterviewStore(context: Context) :
 }
 
 object InterviewReminderScheduler {
+    fun rescheduleAll(context: Context) {
+        InterviewStore(context).all().forEach { interview ->
+            val delay = interview.scheduledAtEpochMs - System.currentTimeMillis() - TimeUnit.HOURS.toMillis(1)
+            if (delay > 0L) runCatching { schedule(context, interview) }
+        }
+    }
+
     fun schedule(context: Context, interview: InterviewRecord) {
         val delay = interview.scheduledAtEpochMs - System.currentTimeMillis() - TimeUnit.HOURS.toMillis(1)
         require(delay > 0L) { "Interview must be more than one hour in the future." }
