@@ -26,9 +26,11 @@ object CountryRegistry {
     private val configs = listOf(
         CountryConfig("NZ","New Zealand","Accredited Employer Work Visa (AEWV)","Immigration New Zealand",
             "https://www.immigration.govt.nz/visas/accredited-employer-work-visa/","Accredited employer check",
-            "https://www.immigration.govt.nz/employ-migrants/accredited-employer-check/",
+            "https://www.immigration.govt.nz/work/requirements-for-work-visas/approved-employers/accredited-employer-list/",
             listOf(CountryOfficialSource("AEWV","https://www.immigration.govt.nz/visas/accredited-employer-work-visa/","Visa and job-offer requirements."),
                 CountryOfficialSource("Accredited employer check","https://www.immigration.govt.nz/employ-migrants/accredited-employer-check/","Employer accreditation; not proof that a specific vacancy can sponsor.")),
+                CountryOfficialSource("AEWV job-check process","https://www.immigration.govt.nz/work/for-employers/getting-accreditation-or-approval-to-hire/employer-accreditation-for-the-aewv/aewv-employer-accreditation-and-job-check-process/","Job checks are vacancy-specific and distinct from employer accreditation."),
+                CountryOfficialSource("AEWV employment agreement checklist","https://www.immigration.govt.nz/work/for-employers/getting-accreditation-or-approval-to-hire/employer-accreditation-for-the-aewv/applying-for-a-job-check-process-steps/applying-for-a-job-check-employer-checklist/","Required job, hours, pay, leave and agreement conditions."),
             listOf(
                 CountryJobSource("trade-assist","Trade Assist","https://tradeassist.net/find-work",CountrySourceAccess.BROWSER_HANDOFF,"Recruitment listings; ask recruiter whether the specific role supports an AEWV."),
                 CountryJobSource("enterprise-nz","Enterprise Recruitment NZ","https://www.enterprise.co.nz/",CountrySourceAccess.BROWSER_HANDOFF,"Use the New Zealand agency site; confirm vacancy and work-rights policy."),
