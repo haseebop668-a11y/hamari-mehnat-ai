@@ -302,6 +302,8 @@ private fun NzVerificationPanel(context: Context) {
     var contractText by remember { mutableStateOf("") }
     var expectedEmployer by remember { mutableStateOf("") }
     var expectedRole by remember { mutableStateOf("") }
+    var expectedLocation by remember { mutableStateOf("") }
+    var advertisedHourlyPay by remember { mutableStateOf("") }
     var contractReport by remember { mutableStateOf<EmploymentContractReport?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -395,6 +397,20 @@ private fun NzVerificationPanel(context: Context) {
             singleLine = true
         )
         OutlinedTextField(
+            value = expectedLocation,
+            onValueChange = { expectedLocation = it; contractReport = null },
+            label = { Text("Expected work location (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = advertisedHourlyPay,
+            onValueChange = { advertisedHourlyPay = it; contractReport = null },
+            label = { Text("Advertised hourly pay in NZD (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
             value = contractText,
             onValueChange = { contractText = it; contractReport = null },
             label = { Text("Paste employment agreement text") },
@@ -406,7 +422,9 @@ private fun NzVerificationPanel(context: Context) {
                 contractReport = EmploymentContractAnalyzer().analyze(
                     contractText = contractText,
                     expectedEmployerName = expectedEmployer.takeIf(String::isNotBlank),
-                    expectedJobTitle = expectedRole.takeIf(String::isNotBlank)
+                    expectedJobTitle = expectedRole.takeIf(String::isNotBlank),
+                    expectedWorkLocation = expectedLocation.takeIf(String::isNotBlank),
+                    advertisedHourlyPayNzd = advertisedHourlyPay.toDoubleOrNull()
                 )
             },
             enabled = contractText.isNotBlank(),
