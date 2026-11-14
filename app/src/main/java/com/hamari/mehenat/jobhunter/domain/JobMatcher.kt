@@ -12,7 +12,17 @@ class JobMatcher {
         "mining utility worker" to listOf("mine site utility", "utility worker", "village utility", "mine services"),
         "driller offsider" to listOf("drillers assistant", "drilling assistant"),
         "welder" to listOf("fabricator", "metal fabricator", "welding"),
-        "forklift operator" to listOf("forklift driver")
+        "forklift operator" to listOf("forklift driver"),
+        "civil labourer" to listOf("civil laborer", "road worker", "roadworks labourer", "infrastructure worker"),
+        "road worker" to listOf("roadworks", "traffic management", "civil construction"),
+        "plant operator" to listOf("excavator operator", "loader operator", "heavy machinery operator"),
+        "excavator operator" to listOf("digger operator", "earthmoving operator"),
+        "painter" to listOf("commercial painter", "industrial painter", "painting"),
+        "maintenance technician" to listOf("maintenance worker", "property maintenance", "handyperson"),
+        "truck driver" to listOf("class 2 driver", "class 4 driver", "class 5 driver", "heavy vehicle driver"),
+        "logistics assistant" to listOf("freight handler", "dispatch assistant", "transport worker"),
+        "traffic controller" to listOf("traffic management worker", "stop go operator"),
+        "scaffolder" to listOf("scaffolding labourer", "scaffolding")
     )
 
     private val positiveSignals = listOf(
