@@ -115,4 +115,29 @@ class NzVerificationTest {
         assertEquals(ContractCheckStatus.REVIEW_REQUIRED, report.findings.first { it.code == "probation_needs_review" }.status)
         assertEquals(40.0, report.detectedWeeklyHours!!, 0.0)
     }
+    @Test fun unrelatedFuzzyResultsAreNotReportedAsExactNameMatches() {
+        val fields = JSONArray()
+            .put(JSONObject().put("APIColumn", "employerName").put("Value", "Different Construction Limited"))
+            .put(JSONObject().put("APIColumn", "nzbn").put("Value", "9429030665699"))
+        val record = JSONObject().put("field_schema", JSONObject().put("raw", fields))
+        server.enqueue(MockResponse().setResponseCode(200).setBody(
+            JSONObject().put("totalResults", 1).put("results", JSONArray().put(record).toString()).toString()
+        ))
+        val result = NzEmployerVerificationClient(
+            http = OkHttpClient(), endpoint = server.url("/inz").toString()
+        ).lookup("Example Civil Limited")
+        assertEquals(NzEmployerLookupStatus.NO_PUBLIC_MATCH_INCONCLUSIVE, result.status)
+        assertTrue(result.employers.isNotEmpty())
+        assertTrue(result.message.contains("No public result"))
+    }
+
+    @Test fun rejectsOversizedInzEmployerResponses() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("x".repeat(1024 * 1024 + 1)))
+        val result = NzEmployerVerificationClient(
+            http = OkHttpClient(), endpoint = server.url("/inz").toString()
+        ).lookup("Example Civil Limited")
+        assertEquals(NzEmployerLookupStatus.LOOKUP_FAILED, result.status)
+        assertTrue(result.error?.contains("1 MB safety limit") == true)
+    }
+
 }
