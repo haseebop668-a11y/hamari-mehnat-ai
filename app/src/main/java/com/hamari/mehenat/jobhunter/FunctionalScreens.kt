@@ -39,6 +39,12 @@ import com.hamari.mehenat.jobhunter.data.InterviewReminderScheduler
 import com.hamari.mehenat.jobhunter.data.OfficialVisaSources
 import com.hamari.mehenat.jobhunter.data.OfficialVisaResearchClient
 import com.hamari.mehenat.jobhunter.data.VisaResearchResult
+import com.hamari.mehenat.jobhunter.data.NzEmployerVerificationClient
+import com.hamari.mehenat.jobhunter.data.NzEmployerLookupResult
+import com.hamari.mehenat.jobhunter.data.NzEmployerLookupStatus
+import com.hamari.mehenat.jobhunter.domain.EmploymentContractAnalyzer
+import com.hamari.mehenat.jobhunter.domain.EmploymentContractReport
+import com.hamari.mehenat.jobhunter.domain.ContractFindingSeverity
 import com.hamari.mehenat.jobhunter.domain.JobListing
 import com.hamari.mehenat.jobhunter.domain.JobMatcher
 import com.hamari.mehenat.jobhunter.domain.JobProfile
@@ -280,6 +286,167 @@ fun JobsScreen(context: Context) {
                     }) { Text("Open official source") }
                 }
             }
+        }
+    }
+        Divider(color = Color(0xFF303945))
+        NzVerificationPanel(context)
+
+}
+
+
+@Composable
+private fun NzVerificationPanel(context: Context) {
+    var employerQuery by remember { mutableStateOf("") }
+    var employerResult by remember { mutableStateOf<NzEmployerLookupResult?>(null) }
+    var employerLoading by remember { mutableStateOf(false) }
+    var contractText by remember { mutableStateOf("") }
+    var expectedEmployer by remember { mutableStateOf("") }
+    var expectedRole by remember { mutableStateOf("") }
+    var contractReport by remember { mutableStateOf<EmploymentContractReport?>(null) }
+    val scope = rememberCoroutineScope()
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("NEW ZEALAND — EMPLOYER & CONTRACT CHECK", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(
+            "Search Immigration New Zealand's public accredited-employer register. An employer accreditation match does not prove that a specific vacancy has an approved job check.",
+            color = ScreenMuted, fontSize = 11.sp
+        )
+        OutlinedTextField(
+            value = employerQuery,
+            onValueChange = { employerQuery = it; employerResult = null },
+            label = { Text("Employer legal name or 13-digit NZBN") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        Button(
+            onClick = {
+                employerLoading = true
+                employerResult = null
+                scope.launch {
+                    employerResult = withContext(Dispatchers.IO) {
+                        NzEmployerVerificationClient().lookup(employerQuery)
+                    }
+                    employerLoading = false
+                }
+            },
+            enabled = !employerLoading && employerQuery.trim().length >= 3,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (employerLoading) "Checking INZ register…" else "Check employer accreditation") }
+
+        employerResult?.let { result ->
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ScreenPanel)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(
+                        when (result.status) {
+                            NzEmployerLookupStatus.ACCREDITED_NZBN_MATCH -> "Exact NZBN match — accreditation listed"
+                            NzEmployerLookupStatus.EXPIRED_NZBN_MATCH -> "NZBN match — published accreditation expired"
+                            NzEmployerLookupStatus.EXACT_NAME_MATCH_REQUIRES_NZBN_CONFIRMATION -> "Employer name result — confirm NZBN"
+                            NzEmployerLookupStatus.NO_PUBLIC_MATCH_INCONCLUSIVE -> "No public match — inconclusive"
+                            NzEmployerLookupStatus.LOOKUP_FAILED -> "Lookup unavailable"
+                        },
+                        color = if (result.status == NzEmployerLookupStatus.ACCREDITED_NZBN_MATCH) ScreenGold else ScreenMuted,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                    Text(result.message, color = ScreenMuted, fontSize = 11.sp)
+                    result.employers.forEach { employer ->
+                        Text(employer.legalName, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                        employer.tradingName?.let { Text("Trading name: $it", color = ScreenMuted, fontSize = 11.sp) }
+                        Text("NZBN: ${employer.nzbn ?: "Not returned"}", color = ScreenMuted, fontSize = 11.sp)
+                        Text("Accreditation expiry: ${employer.accreditationExpiryDate ?: "Not returned"}", color = ScreenMuted, fontSize = 11.sp)
+                    }
+                    Text("Checked: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(result.checkedAtEpochMs))}", color = ScreenMuted, fontSize = 10.sp)
+                    TextButton(onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(result.sourceUrl)))
+                    }) { Text("Open official INZ employer register") }
+                    result.error?.let { Text("Technical detail: $it", color = ScreenMuted, fontSize = 10.sp) }
+                }
+            }
+        }
+
+        Text("SPECIFIC JOB CHECK", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text(
+            "INZ does not provide a public worker-facing lookup for a job-check approval by vacancy. This app will not invent a verified result. Ask the employer for the job-check approval details and compare the role, location, pay and conditions with the signed offer.",
+            color = ScreenMuted, fontSize = 11.sp
+        )
+        OutlinedButton(
+            onClick = {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.immigration.govt.nz/work/for-employers/getting-accreditation-or-approval-to-hire/employer-accreditation-for-the-aewv/aewv-employer-accreditation-and-job-check-process/")))
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Open INZ job-check process") }
+
+        Divider(color = Color(0xFF303945))
+        Text("EMPLOYMENT AGREEMENT TEXT REVIEW", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text("Paste readable contract text below. This first-pass checklist flags missing terms and risk wording; it is not legal advice.", color = ScreenMuted, fontSize = 11.sp)
+        OutlinedTextField(
+            value = expectedEmployer,
+            onValueChange = { expectedEmployer = it; contractReport = null },
+            label = { Text("Expected employer legal name (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = expectedRole,
+            onValueChange = { expectedRole = it; contractReport = null },
+            label = { Text("Expected job title (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = contractText,
+            onValueChange = { contractText = it; contractReport = null },
+            label = { Text("Paste employment agreement text") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 5
+        )
+        Button(
+            onClick = {
+                contractReport = EmploymentContractAnalyzer().analyze(
+                    contractText = contractText,
+                    expectedEmployerName = expectedEmployer.takeIf(String::isNotBlank),
+                    expectedJobTitle = expectedRole.takeIf(String::isNotBlank)
+                )
+            },
+            enabled = contractText.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Analyze agreement") }
+
+        contractReport?.let { report ->
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ScreenPanel)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(report.summary, color = if (report.hasHighRiskFlags) Color(0xFFE7A08B) else ScreenGold, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Text(
+                        "Detected hours: ${report.detectedWeeklyHours?.let { "$it/week" } ?: "Not detected"} • Hourly pay: ${report.detectedHourlyPayNzd?.let { "NZD $it" } ?: "Not detected"}",
+                        color = ScreenMuted, fontSize = 11.sp
+                    )
+                    report.findings.forEach { finding ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                "${if (finding.severity == ContractFindingSeverity.HIGH_RISK) "⚠ " else "• "}${finding.title}",
+                                color = if (finding.severity == ContractFindingSeverity.HIGH_RISK) Color(0xFFE7A08B) else ScreenGold,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
+                            Text(finding.detail, color = ScreenMuted, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        Text("NEW ZEALAND JOB PORTALS", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text("These links open the source websites. Search results from permitted public feeds are separate; browser hand-off is used where no authorized job-search API is available.", color = ScreenMuted, fontSize = 11.sp)
+        listOf(
+            "SEEK New Zealand" to "https://www.seek.co.nz/",
+            "Tradestaff" to "https://www.tradestaff.co.nz/",
+            "Trade Assist" to "https://tradeassist.net/",
+            "Enterprise Recruitment" to "https://www.enterprise.co.nz/"
+        ).forEach { (label, url) ->
+            OutlinedButton(
+                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Open $label") }
         }
     }
 }
