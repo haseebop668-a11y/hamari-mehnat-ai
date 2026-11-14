@@ -41,7 +41,8 @@ class AdzunaCredentialsStore(context: Context) {
     }
 
     fun clear() {
-        prefs.edit().remove("credentials").commit()
+        check(prefs.edit().remove("credentials").commit()) { "Could not remove stored Adzuna credentials." }
+        KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry(alias) }
     }
 
     private fun encrypt(plain: ByteArray): ByteArray {
