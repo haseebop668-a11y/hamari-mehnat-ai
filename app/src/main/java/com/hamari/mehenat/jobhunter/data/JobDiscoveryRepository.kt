@@ -50,19 +50,19 @@ class JobDiscoveryRepository(context: Context) {
         val providers = mutableListOf<JobProvider>(
             FunctionJobProvider(
                 JobProviderDescriptor("arbeitnow", "Arbeitnow", ProviderKind.PUBLIC_API, false, setOf("AU", "NZ", "GB", "DE", "CA"), 6, 60 * 60 * 1000L),
-                api::searchArbeitnow
+                { query, countries -> api.searchArbeitnow(query, countries) }
             ),
             FunctionJobProvider(
                 JobProviderDescriptor("remotive", "Remotive", ProviderKind.PUBLIC_API, false, setOf("AU", "NZ", "GB", "DE", "CA"), 4, 6 * 60 * 60 * 1000L),
-                api::searchRemotive
+                { query, countries -> api.searchRemotive(query, countries) }
             ),
             FunctionJobProvider(
                 JobProviderDescriptor("himalayas", "Himalayas", ProviderKind.PUBLIC_API, false, setOf("AU", "NZ", "GB", "DE", "CA"), 1),
-                api::searchHimalayas
+                { query, countries -> api.searchHimalayas(query, countries) }
             ),
             FunctionJobProvider(
                 JobProviderDescriptor("jobicy", "Jobicy", ProviderKind.PUBLIC_API, false, setOf("AU", "NZ", "GB", "DE", "CA"), 4, 60 * 60 * 1000L),
-                api::searchJobicy
+                { query, countries -> api.searchJobicy(query, countries) }
             )
         )
 
