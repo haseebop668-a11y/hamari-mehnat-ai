@@ -88,8 +88,12 @@ class EmploymentContractAnalyzer {
             findings += ContractFinding("pay_mismatch", "Advertised and contract pay differ", "Detected NZD $hourlyPay/hour, but the advertised rate supplied was NZD $advertisedHourlyPayNzd/hour.", ContractFindingSeverity.HIGH_RISK, ContractCheckStatus.FLAGGED)
         }
 
-        val trialPatterns = listOf("trial period", "90-day trial", "90 day trial", "trial clause")
-        if (trialPatterns.any(normalized::contains)) {
+        val trialPattern = Regex("(?i)(?:90[- ]day\\s+)?trial\\s+period|90[- ]day\\s+trial|trial\\s+clause")
+        val trialClausePresent = trialPattern.findAll(normalized).any { match ->
+            val prefix = normalized.substring(maxOf(0, match.range.first - 24), match.range.first).trimEnd()
+            !listOf("no", "without", "not include", "does not include", "doesn't include").any { prefix.endsWith(it) }
+        }
+        if (trialClausePresent) {
             findings += ContractFinding("prohibited_trial_period", "Trial-period clause found", "AEWV employment agreements must not include a statutory trial-period clause. Ask a licensed adviser or INZ to review this exact clause before signing.", ContractFindingSeverity.HIGH_RISK, ContractCheckStatus.FLAGGED)
         }
         if (normalized.contains("probationary period") || normalized.contains("probation period")) {
