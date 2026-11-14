@@ -35,15 +35,21 @@ class OfficialVisaResearchClient(
                     return VisaResearchResult(source, now, response.code, "", "HTTP ${response.code}")
                 }
                 val body = response.body ?: error("Empty page response")
+                require(body.contentLength() < 0L || body.contentLength() <= MAX_HTML_BYTES) {
+                    "Official page exceeds the 2 MB safety limit."
+                }
                 val output = ByteArrayOutputStream()
                 body.byteStream().use { input ->
                     val buffer = ByteArray(8192)
                     var total = 0
-                    while (total < MAX_HTML_BYTES) {
-                        val count = input.read(buffer, 0, minOf(buffer.size, MAX_HTML_BYTES - total))
+                    while (total <= MAX_HTML_BYTES) {
+                        val count = input.read(buffer, 0, minOf(buffer.size, MAX_HTML_BYTES + 1 - total))
                         if (count < 0) break
                         output.write(buffer, 0, count)
                         total += count
+                    }
+                    require(total <= MAX_HTML_BYTES) {
+                        "Official page exceeds the 2 MB safety limit."
                     }
                 }
                 val document = Jsoup.parse(output.toString(Charsets.UTF_8.name()))

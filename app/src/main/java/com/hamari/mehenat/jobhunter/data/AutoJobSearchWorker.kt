@@ -10,6 +10,7 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.hamari.mehenat.jobhunter.domain.JobMatcher
 import com.hamari.mehenat.jobhunter.domain.JobProfile
+import com.hamari.mehenat.jobhunter.domain.JobFreshnessService
 import org.json.JSONArray
 import java.util.concurrent.TimeUnit
 
@@ -32,7 +33,7 @@ class AutoJobSearchWorker(context: Context, params: WorkerParameters) : Worker(c
             val matcher = JobMatcher()
             val tracker = ApplicationTrackerStore(applicationContext)
             try {
-                sources.flatMap { it.jobs }.distinctBy { it.id }.forEach { job ->
+                JobFreshnessService.removeExpired(sources.flatMap { it.jobs }).forEach { job ->
                     val match = matcher.evaluate(
                         job,
                         JobProfile(targetRoles = roles, targetCountries = countries, skills = skills)

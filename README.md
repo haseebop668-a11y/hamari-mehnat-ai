@@ -14,23 +14,38 @@ A private, single-owner Android application for international job discovery and 
 
 - **Profile:** encrypted owner profile with target roles, countries, skills and experience summary.
 - **Document vault:** PDF, DOCX, TXT and image import into app-private AES-GCM encrypted files. PDF/DOCX/TXT text extraction is local. Scanned-PDF/image OCR is not enabled.
-- **Job discovery:** Arbeitnow, Remotive, Himalayas, Jobicy, Greenhouse public company boards and Lever public company boards. LinkedIn, Indeed, SEEK and EURES are browser hand-off links; login-protected pages are not scraped.
+- **Application PDF export:** local CV-tailoring and cover-letter drafts can be exported to a user-selected PDF location after review.
+- **Job discovery:** Arbeitnow, Remotive, Himalayas, Jobicy, optional Adzuna country API, Greenhouse public company boards and Lever public company boards. LinkedIn, Indeed, SEEK and EURES are browser hand-off links; login-protected pages are not scraped.
 - **Source compliance:** rate limits for public APIs, direct source/application URLs, source attribution, expiry filtering for Himalayas listings and no onward job-feed redistribution.
-- **Matching:** deterministic role/skill/country relevance scoring with cautious sponsorship wording. A sponsorship signal is not a guarantee of sponsorship or visa eligibility.
+- **Matching:** deterministic role/skill/country relevance scoring with cautious sponsorship wording, NZ trade-role synonyms, expired-listing filtering and stable-ID deduplication. A sponsorship signal is not a guarantee of sponsorship or visa eligibility.
 - **Local specialist agents:** CV analyst, job-match analyst, CV tailoring, cover-letter drafting, employer outreach drafting, interview coaching and official-source visa explanation. These are prompt-specialized workflows using one local model; the app does not claim to train a foundation model from personal documents.
 - **Employer outreach:** browser-based employer research and user-reviewed email drafts opened in the user's email app. The app does not send automatically or read the user's inbox.
-- **Tracker:** saved jobs, application stages, employer contact/response notes and local interview history.
-- **Interview reminders:** local notification scheduled one hour before the interview in the entered time zone.
+- **Tracker:** saved jobs, application stages, employer contact/response notes and local interview history; personal text fields are encrypted at rest and progressed applications survive vacancy expiry.
+- **Interview reminders:** local notification scheduled one hour before the interview in the entered time zone; WorkManager persists only the interview ID and reads details from the encrypted local store.
 - **Visa/work-permit research:** fetches bounded excerpts from registered official government pages, records retrieval timestamps and stores the evidence locally for the visa specialist agent.
+- **New Zealand employer checks:** searches the public accredited-employer register endpoint used by Immigration New Zealand's own search page, checks exact NZBN matches and published accreditation expiry, and links back to INZ. Name-only matches require NZBN confirmation; no public match is inconclusive because some employers opt out of publication.
+- **AEWV agreement review:** checks pasted or extracted contract text for missing core terms, weekly hours, pay, trial-period wording, employer/job-title mismatches and common exploitation red flags. This is a first-pass checklist, not legal advice.
 - **Scheduled discovery:** WorkManager runs every 12 hours only while network connectivity is available, rotates configured target roles and stores matching vacancies locally.
+
+## Multi-country support
+
+The Android core is country-neutral. Immigration requirements and official verification entry points are registered as country modules rather than embedded in the shared matcher.
+
+Initial country modules: New Zealand (AEWV), Australia (employer-sponsored skilled pathways), United Kingdom (Skilled Worker), Germany (qualified-professional routes), and Canada (employer-specific permits / LMIA or exemption). These are official research starting points, not visa decisions.
+
+To add a country, register its ISO country code, official immigration authority, work route, employer verification method and official sources in CountryRegistry. Add a dedicated policy/source adapter and fixture-based tests only where local rules require it. Shared profile, CV, matching, tracker, encrypted storage and navigation remain reusable. See docs/MULTI_COUNTRY_ARCHITECTURE.md.
+
+Country-specific sponsorship wording is triage only. Employer accreditation/licensing does not establish that a particular job can sponsor a particular applicant. Verify current rules and job-specific conditions at official sources.
 
 ## Job source notes
 
 - Remotive listings are delayed by 24 hours; the app caps its public API use at four requests per UTC day and enforces a six-hour interval.
 - Himalayas job data is refreshed daily; the app limits requests to one per UTC day, retains source attribution and uses the API-provided applicationLink for the application action.
 - Jobicy public API use is limited to four requests per day with at least one hour between calls.
+- Adzuna is an optional country-specific API for Australia, New Zealand, UK, Germany and Canada. The user obtains an app ID/key from the official developer portal; the app stores them encrypted with Android Keystore. The app applies a conservative local cap of 10 country-search requests per UTC day. Use is intended for personal job search; provider quotas and terms can change.
 - Greenhouse and Lever endpoints are company-board-specific. Enter board IDs/site names in the Jobs tab; they are not global job-search APIs.
 - LinkedIn, Indeed and SEEK do not provide an unrestricted public API for all logged-in listings. The app opens their official search pages in a browser rather than bypassing access controls.
+- For New Zealand, SEEK NZ, Tradestaff, Trade Assist and Enterprise Recruitment are browser hand-off sources. They are not represented as live API integrations.
 
 ## Local AI model
 
@@ -79,7 +94,7 @@ A successful CI build does not replace a real-device test of model download, RAM
 - No API keys are required for the included public feeds.
 - No analytics SDK or cloud AI provider is included.
 - Android backup is disabled and cleartext HTTP is disabled.
-- Personal documents are encrypted at rest in app-private storage.
+- Profile, documents and personal tracker/interview text fields are encrypted at rest in app-private storage with Android Keystore AES-GCM.
 - The repository currently contains application source only. Change repository visibility to Private before adding any private project materials or secrets.
 
 ## Existing prototype

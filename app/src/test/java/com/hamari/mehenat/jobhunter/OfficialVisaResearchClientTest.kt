@@ -46,4 +46,13 @@ class OfficialVisaResearchClientTest {
         assertTrue(result.error?.contains("503") == true)
         assertTrue(result.text.isBlank())
     }
+    @Test fun rejectsOfficialPagesLargerThanConfiguredLimit() {
+        val oversizedHtml = "<html><body>" + "x".repeat(2 * 1024 * 1024 + 1) + "</body></html>"
+        server.enqueue(MockResponse().setResponseCode(200).setBody(oversizedHtml))
+        val source = OfficialVisaSource("Test", "Visa page", server.url("/visa").toString(), "Test source")
+        val result = client.fetch(source)
+        assertTrue(result.text.isBlank())
+        assertTrue(result.error?.contains("2 MB safety limit") == true)
+    }
+
 }

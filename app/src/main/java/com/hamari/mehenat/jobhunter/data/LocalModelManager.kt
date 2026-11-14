@@ -40,8 +40,9 @@ class LocalModelManager(context: Context) {
             .get()
             .build()
 
-        client.newCall(request).execute().use { response ->
-            check(response.isSuccessful) { "Model download failed: HTTP ${response.code}" }
+        try {
+            client.newCall(request).execute().use { response ->
+                check(response.isSuccessful) { "Model download failed: HTTP ${response.code}" }
             val body = response.body ?: error("Model download returned an empty response.")
             val total = body.contentLength()
             if (total > 0L) check(total == EXPECTED_SIZE_BYTES) { "Unexpected model file size: $total bytes" }
@@ -53,9 +54,10 @@ class LocalModelManager(context: Context) {
                     while (true) {
                         val count = input.read(buffer)
                         if (count < 0) break
+                        downloaded += count
+                        check(downloaded <= EXPECTED_SIZE_BYTES) { "Model download exceeded the pinned file size." }
                         digest.update(buffer, 0, count)
                         output.write(buffer, 0, count)
-                        downloaded += count
                         if (total > 0L) onProgress(((downloaded * 100L) / total).toInt().coerceIn(0, 100))
                     }
                     output.fd.sync()
@@ -66,12 +68,15 @@ class LocalModelManager(context: Context) {
             check(actual.equals(EXPECTED_SHA256, ignoreCase = true)) {
                 "Model checksum verification failed. The partial download has been rejected."
             }
-        }
+            }
 
-        if (modelFile.exists()) check(modelFile.delete()) { "Could not replace the previous model file." }
-        check(temporary.renameTo(modelFile)) { "Could not finalize the verified model file." }
-        onProgress(100)
-        return modelFile
+            if (modelFile.exists()) check(modelFile.delete()) { "Could not replace the previous model file." }
+            check(temporary.renameTo(modelFile)) { "Could not finalize the verified model file." }
+            onProgress(100)
+            return modelFile
+        } finally {
+            if (temporary.exists()) temporary.delete()
+        }
     }
 
     fun deleteModel(): Boolean = !modelFile.exists() || modelFile.delete()
