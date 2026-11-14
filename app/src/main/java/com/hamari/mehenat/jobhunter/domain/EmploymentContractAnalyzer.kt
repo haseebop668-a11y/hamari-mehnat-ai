@@ -69,7 +69,7 @@ class EmploymentContractAnalyzer {
         present("duration", "Employment duration", listOf("permanent", "fixed term", "fixed-term", "employment period", "start date"), "Confirm whether the agreement is permanent or fixed-term and its start/duration.")
         present("problem_resolution", "Employment problem resolution", listOf("employment relationship problem", "personal grievance", "mediation"), "Check that the agreement explains how to get help with employment relationship problems.")
 
-        val hours = Regex("""(?i)(?:minimum|guaranteed)?\\s*(\\d{1,2}(?:\\.\\d+)?)\\s*(?:hours?|hrs?)\\s*(?:per|/)\\s*week""")
+        val hours = Regex("""(?i)(?:minimum|guaranteed)?\s*(\d{1,2}(?:\.\d+)?)\s*(?:hours?|hrs?)\s*(?:per|/)\s*week""")
             .find(text)?.groupValues?.getOrNull(1)?.toDoubleOrNull()
         if (hours != null) {
             findings += if (hours < 30.0) {
@@ -79,7 +79,7 @@ class EmploymentContractAnalyzer {
             }
         }
 
-        val payMatches = Regex("""(?i)(?:NZD\\s*)?\\$\\s*(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{1,2})?)\\s*(?:nzd)?\\s*(?:per|/)\\s*(?:hour|hr)""").findAll(text).toList()
+        val payMatches = Regex("""(?i)(?:NZD\s*)?\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:nzd)?\s*(?:per|/)\s*(?:hour|hr)""").findAll(text).toList()
         val hourlyPay = payMatches.firstOrNull()?.groupValues?.getOrNull(1)?.replace(",", "")?.toDoubleOrNull()
         if (hourlyPay == null) {
             findings += ContractFinding("hourly_pay_not_detected", "Hourly pay not detected", "No clear NZD hourly rate was detected. If paid a salary, compare the guaranteed hours and effective hourly rate manually.", ContractFindingSeverity.WARNING, ContractCheckStatus.REVIEW_REQUIRED)
