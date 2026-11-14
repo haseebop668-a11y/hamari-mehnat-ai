@@ -34,7 +34,7 @@ data class InterviewRecord(
 )
 
 class InterviewStore(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "personal_interviews.db", null, 1) {
+    SQLiteOpenHelper(context.applicationContext, "personal_interviews.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE interviews (
@@ -50,18 +50,39 @@ class InterviewStore(context: Context) :
         )
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) encryptLegacyRows(db)
+    }
+
+    private fun encryptLegacyRows(db: SQLiteDatabase) {
+        val cipher = LocalFieldCipher()
+        val rows = mutableListOf<Array<String>>()
+        db.rawQuery("SELECT id, company, role, location_or_link, notes FROM interviews", null).use { cursor ->
+            while (cursor.moveToNext()) {
+                rows += arrayOf(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3), cursor.getString(4))
+            }
+        }
+        rows.forEach { row ->
+            val values = ContentValues().apply {
+                put("company", cipher.encrypt(row[1]))
+                put("role", cipher.encrypt(row[2]))
+                put("location_or_link", cipher.encrypt(row[3]))
+                put("notes", cipher.encrypt(row[4]))
+            }
+            db.update("interviews", values, "id = ?", arrayOf(row[0]))
+        }
+    }
 
     fun save(record: InterviewRecord) {
         val values = ContentValues().apply {
             put("id", record.id)
             put("application_id", record.applicationId)
-            put("company", record.company.take(300))
-            put("role", record.role.take(300))
+            put("company", LocalFieldCipher().encrypt(record.company.take(300)))
+            put("role", LocalFieldCipher().encrypt(record.role.take(300)))
             put("scheduled_at", record.scheduledAtEpochMs)
             put("timezone", record.timeZoneId.take(80))
-            put("location_or_link", record.locationOrLink.take(1000))
-            put("notes", record.notes.take(2000))
+            put("location_or_link", LocalFieldCipher().encrypt(record.locationOrLink.take(1000)))
+            put("notes", LocalFieldCipher().encrypt(record.notes.take(2000)))
         }
         writableDatabase.insertWithOnConflict("interviews", null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
@@ -75,8 +96,8 @@ class InterviewStore(context: Context) :
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 items += InterviewRecord(
-                    cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3),
-                    cursor.getLong(4), cursor.getString(5), cursor.getString(6), cursor.getString(7)
+                    cursor.getString(0), cursor.getString(1), LocalFieldCipher().decrypt(cursor.getString(2)), LocalFieldCipher().decrypt(cursor.getString(3)),
+                    cursor.getLong(4), cursor.getString(5), LocalFieldCipher().decrypt(cursor.getString(6)), LocalFieldCipher().decrypt(cursor.getString(7))
                 )
             }
         }
