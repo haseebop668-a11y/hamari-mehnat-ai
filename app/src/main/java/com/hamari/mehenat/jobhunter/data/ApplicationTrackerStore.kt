@@ -55,7 +55,7 @@ class ApplicationTrackerStore(context: Context) :
 
     fun all(): List<TrackedApplication> {
         val now = System.currentTimeMillis()
-        writableDatabase.delete("applications", "expires_at IS NOT NULL AND expires_at <= ?", arrayOf(now.toString()))
+        writableDatabase.delete("applications", "expires_at IS NOT NULL AND expires_at <= ? AND stage = 'Saved'", arrayOf(now.toString()))
         val result = mutableListOf<TrackedApplication>()
         readableDatabase.query(
             "applications",
