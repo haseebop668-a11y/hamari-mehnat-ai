@@ -3,6 +3,7 @@ package com.hamari.mehenat.jobhunter
 import android.os.Bundle
 import android.content.Context
 import com.hamari.mehenat.jobhunter.data.AutoJobSearchScheduler
+import com.hamari.mehenat.jobhunter.data.InterviewReminderScheduler
 import com.hamari.mehenat.jobhunter.data.LocalProfileStore
 import com.hamari.mehenat.jobhunter.data.EncryptedDocumentVault
 import com.hamari.mehenat.jobhunter.data.ApplicationTrackerStore
@@ -43,6 +44,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AutoJobSearchScheduler.schedule(this)
+        InterviewReminderScheduler.rescheduleAll(this)
         setContent {
             HamariMehnatTheme {
                 JobHunterApp(applicationContext)
