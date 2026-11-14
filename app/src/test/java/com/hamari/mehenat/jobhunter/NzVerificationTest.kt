@@ -54,6 +54,18 @@ class NzVerificationTest {
         assertTrue(result.message.contains("not proof"))
     }
 
+    @Test fun recognizesOfficialInzNoResultsHttp400AsInconclusive() {
+        server.enqueue(MockResponse().setResponseCode(400).setBody(
+            JSONObject().put("Title", "No Results")
+                .put("Message", "Your search found no results. You may wish to refine your search.")
+                .toString()
+        ))
+        val result = NzEmployerVerificationClient(
+            http = OkHttpClient(), endpoint = server.url("/inz").toString()
+        ).lookup("No Such Employer Limited")
+        assertEquals(NzEmployerLookupStatus.NO_PUBLIC_MATCH_INCONCLUSIVE, result.status)
+    }
+
     @Test fun rejectsInvalidNzbnLengthBeforeNetworkCall() {
         val result = NzEmployerVerificationClient().lookup("123456")
         assertEquals(NzEmployerLookupStatus.LOOKUP_FAILED, result.status)
