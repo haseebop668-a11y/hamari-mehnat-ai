@@ -16,7 +16,7 @@ data class TrackedApplication(
 )
 
 class ApplicationTrackerStore(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "personal_job_tracker.db", null, 3) {
+    SQLiteOpenHelper(context.applicationContext, "personal_job_tracker.db", null, 4) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -36,14 +36,34 @@ class ApplicationTrackerStore(context: Context) :
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) db.execSQL("ALTER TABLE applications ADD COLUMN expires_at INTEGER")
         if (oldVersion < 3) db.execSQL("ALTER TABLE applications ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+        if (oldVersion < 4) encryptLegacyRows(db)
+    }
+
+    private fun encryptLegacyRows(db: SQLiteDatabase) {
+        val cipher = LocalFieldCipher()
+        val rows = mutableListOf<Array<String>>()
+        db.rawQuery("SELECT id, title, company, source_url, notes FROM applications", null).use { cursor ->
+            while (cursor.moveToNext()) {
+                rows += arrayOf(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3), cursor.getString(4))
+            }
+        }
+        rows.forEach { row ->
+            val values = ContentValues().apply {
+                put("title", cipher.encrypt(row[1]))
+                put("company", cipher.encrypt(row[2]))
+                put("source_url", cipher.encrypt(row[3]))
+                put("notes", cipher.encrypt(row[4]))
+            }
+            db.update("applications", values, "id = ?", arrayOf(row[0]))
+        }
     }
 
     fun save(job: JobListing): Boolean {
         val values = ContentValues().apply {
             put("id", job.id)
-            put("title", job.title.take(300))
-            put("company", job.company.take(300))
-            put("source_url", job.sourceUrl.take(2048))
+            put("title", LocalFieldCipher().encrypt(job.title.take(300)))
+            put("company", LocalFieldCipher().encrypt(job.company.take(300)))
+            put("source_url", LocalFieldCipher().encrypt(job.sourceUrl.take(2048)))
             put("stage", "Saved")
             put("created_at", System.currentTimeMillis())
             if (job.expiresAtEpochMs != null) put("expires_at", job.expiresAtEpochMs)
@@ -65,11 +85,11 @@ class ApplicationTrackerStore(context: Context) :
             while (cursor.moveToNext()) {
                 result += TrackedApplication(
                     id = cursor.getString(0),
-                    title = cursor.getString(1),
-                    company = cursor.getString(2),
-                    url = cursor.getString(3),
+                    title = LocalFieldCipher().decrypt(cursor.getString(1)),
+                    company = LocalFieldCipher().decrypt(cursor.getString(2)),
+                    url = LocalFieldCipher().decrypt(cursor.getString(3)),
                     stage = cursor.getString(4),
-                    notes = cursor.getString(5)
+                    notes = LocalFieldCipher().decrypt(cursor.getString(5))
                 )
             }
         }
@@ -83,7 +103,7 @@ class ApplicationTrackerStore(context: Context) :
     }
 
     fun updateNotes(id: String, notes: String): Boolean {
-        val values = ContentValues().apply { put("notes", notes.take(4000)) }
+        val values = ContentValues().apply { put("notes", LocalFieldCipher().encrypt(notes.take(4000))) }
         return writableDatabase.update("applications", values, "id = ?", arrayOf(id)) > 0
     }
 
