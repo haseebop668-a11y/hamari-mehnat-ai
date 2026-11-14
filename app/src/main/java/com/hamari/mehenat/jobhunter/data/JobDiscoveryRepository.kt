@@ -12,22 +12,23 @@ class SourceRateLimiter(context: Context) {
         dailyLimit: Int,
         minIntervalMs: Long = 0L,
         todayUtc: String = LocalDate.now(ZoneOffset.UTC).toString(),
-        nowEpochMs: Long = System.currentTimeMillis()
+        nowEpochMs: Long = System.currentTimeMillis(),
+        requestCost: Int = 1
     ): Boolean = synchronized(LOCK) {
         require(source.matches(Regex("[a-z0-9_-]{1,40}")))
-        require(dailyLimit > 0 && minIntervalMs >= 0L)
+        require(dailyLimit > 0 && minIntervalMs >= 0L && requestCost > 0)
         val dayKey = "$source.day"
         val countKey = "$source.count"
         val lastKey = "$source.last"
         val storedDay = prefs.getString(dayKey, null)
         val count = if (storedDay == todayUtc) prefs.getInt(countKey, 0) else 0
         val lastCall = prefs.getLong(lastKey, 0L)
-        if (count >= dailyLimit || (lastCall > 0L && nowEpochMs - lastCall < minIntervalMs)) {
+        if (count + requestCost > dailyLimit || (lastCall > 0L && nowEpochMs - lastCall < minIntervalMs)) {
             return@synchronized false
         }
         prefs.edit()
             .putString(dayKey, todayUtc)
-            .putInt(countKey, count + 1)
+            .putInt(countKey, count + requestCost)
             .putLong(lastKey, nowEpochMs)
             .commit()
     }
@@ -48,7 +49,7 @@ class JobDiscoveryRepository(context: Context) {
     ): List<SourceResult> {
         val results = mutableListOf<SourceResult>()
         if (adzunaCredentials != null) {
-            results += if (limiter.tryAcquire("adzuna", 10)) {
+            results += if (limiter.tryAcquire("adzuna", 10, requestCost = countries.distinct().size.coerceAtMost(5).coerceAtLeast(1))) {
                 api.searchAdzuna(query, countries, adzunaCredentials.appId, adzunaCredentials.appKey)
             } else {
                 SourceResult("Adzuna", emptyList(), "Local Adzuna safety cap reached: 10 country-search requests per UTC day.")
