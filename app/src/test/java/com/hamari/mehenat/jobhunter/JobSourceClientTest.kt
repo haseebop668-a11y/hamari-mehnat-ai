@@ -101,4 +101,26 @@ class JobSourceClientTest {
         assertTrue(!client.isHimalayasJobOpen(url))
     }
 
+    @Test fun requiresAllMeaningfulQueryTermsToAvoidBroadFalseMatches() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(
+            """{"data":[
+                {"title":"Diesel Mechanic","company_name":"Example","location":"Perth, Australia","description":"Workshop maintenance","url":"https://jobs.example/1"},
+                {"title":"Heavy Plant Operator","company_name":"Example","location":"Perth, Australia","description":"Diesel fleet exposure","url":"https://jobs.example/2"}
+            ]}"""
+        ))
+        val result = client.searchArbeitnow("diesel mechanic", listOf("AU"), 1)
+        assertNull(result.error)
+        assertEquals(1, result.jobs.size)
+        assertEquals("Diesel Mechanic", result.jobs.single().title)
+        assertEquals("AU", result.jobs.single().country)
+    }
+
+    @Test fun rejectsInsecureHttpApplicationLinks() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(
+            """{"data":[{"title":"Diesel Mechanic","company_name":"Example","location":"Perth, Australia","description":"Diesel mechanic","url":"http://jobs.example/unsafe"}]}"""
+        ))
+        val result = client.searchArbeitnow("diesel mechanic", listOf("Australia"), 1)
+        assertTrue(result.jobs.isEmpty())
+    }
+
 }
