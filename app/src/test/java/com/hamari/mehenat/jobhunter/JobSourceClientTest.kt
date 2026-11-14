@@ -56,7 +56,7 @@ class JobSourceClientTest {
         server.enqueue(MockResponse().setResponseCode(503).setBody("temporarily unavailable"))
         val result = client.searchArbeitnow("mechanic", listOf("Australia"), 1)
         assertTrue(result.jobs.isEmpty())
-        assertEquals("IllegalStateException", result.error)
+        assertTrue("Expected HTTP failure detail, got: ${result.error}", result.error?.startsWith("IllegalStateException: HTTP 503") == true)
     }
     @Test fun parsesHimalayasApplicationAndSourceAttributionLinks() {
         server.enqueue(MockResponse().setResponseCode(200).setBody(
@@ -67,7 +67,7 @@ class JobSourceClientTest {
         assertEquals(1, result.jobs.size)
         assertEquals("https://careers.example/apply/1", result.jobs.first().sourceUrl)
         assertEquals("https://himalayas.app/companies/example-mining/jobs/example-remote-diesel", result.jobs.first().sourcePageUrl)
-        assertEquals("https://himalayas.app/jobs/api/companies/example-mining/jobs/example-remote-diesel", result.jobs.first().verificationUrl)
+        assertEquals(server.url("/himalayas/companies/example-mining/jobs/example-remote-diesel").toString(), result.jobs.first().verificationUrl)
     }
 
     @Test fun ignoresExpiredHimalayasListings() {
