@@ -87,6 +87,19 @@ class NzVerificationTest {
         assertTrue(report.findings.any { it.code == "aewv_hours_below_minimum" })
     }
 
+    @Test fun contractCrossChecksAdvertisedPayAndWorkLocation() {
+        val report = EmploymentContractAnalyzer().analyze(
+            "Employer: Example Civil. Position: Civil Labourer. Place of work: Christchurch. " +
+                "Guaranteed hours: 40 hours per week. Pay rate: NZD $25 per hour.",
+            expectedEmployerName = "Example Civil",
+            expectedJobTitle = "Civil Labourer",
+            expectedWorkLocation = "Auckland",
+            advertisedHourlyPayNzd = 30.0
+        )
+        assertTrue(report.findings.any { it.code == "work_location_mismatch" })
+        assertTrue(report.findings.any { it.code == "pay_mismatch" })
+    }
+
     @Test fun probationaryPeriodIsNotAutomaticallyClassifiedAsTrialPeriod() {
         val report = EmploymentContractAnalyzer().analyze(
             "Position: Mechanic. Probationary period applies. Guaranteed hours: 40 hours per week. Pay rate: $32 per hour."
