@@ -68,6 +68,7 @@ class LocalModelManager(context: Context) {
             check(actual.equals(EXPECTED_SHA256, ignoreCase = true)) {
                 "Model checksum verification failed. The partial download has been rejected."
             }
+            }
 
             if (modelFile.exists()) check(modelFile.delete()) { "Could not replace the previous model file." }
             check(temporary.renameTo(modelFile)) { "Could not finalize the verified model file." }
