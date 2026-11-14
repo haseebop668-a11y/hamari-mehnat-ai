@@ -12,11 +12,15 @@ import javax.crypto.spec.GCMParameterSpec
 /** Encrypts individual local database fields with an Android Keystore AES-GCM key. */
 internal class LocalFieldCipher {
     fun encrypt(value: String): String {
-        if (value.startsWith(PREFIX)) return value
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val payload = byteArrayOf(cipher.iv.size.toByte()) + cipher.iv + cipher.doFinal(value.toByteArray(Charsets.UTF_8))
         return PREFIX + Base64.encodeToString(payload, Base64.NO_WRAP)
+    }
+
+    fun encryptIfNeeded(value: String): String {
+        if (value.startsWith(PREFIX) && runCatching { decrypt(value) }.isSuccess) return value
+        return encrypt(value)
     }
 
     fun decrypt(value: String): String {
