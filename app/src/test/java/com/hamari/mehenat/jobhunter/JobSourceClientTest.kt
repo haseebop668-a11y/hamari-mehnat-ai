@@ -25,7 +25,8 @@ class JobSourceClientTest {
             leverBaseUrl = server.url("/lever").toString().trimEnd('/'),
             himalayasBaseUrl = server.url("/himalayas").toString().trimEnd('/'),
             himalayasVerificationBaseUrl = server.url("/himalayas/companies").toString().trimEnd('/'),
-            jobicyBaseUrl = server.url("/jobicy").toString().trimEnd('/')
+            jobicyBaseUrl = server.url("/jobicy").toString().trimEnd('/'),
+            adzunaBaseUrl = server.url("/adzuna").toString().trimEnd('/')
         )
     }
 
@@ -120,6 +121,30 @@ class JobSourceClientTest {
             """{"data":[{"title":"Diesel Mechanic","company_name":"Example","location":"Perth, Australia","description":"Diesel mechanic","url":"http://jobs.example/unsafe"}]}"""
         ))
         val result = client.searchArbeitnow("diesel mechanic", listOf("Australia"), 1)
+        assertTrue(result.jobs.isEmpty())
+    }
+
+    @Test fun parsesAdzunaCountrySpecificResultsAndKeepsCredentialsOutOfSourceLinks() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(
+            """{"results":[{"title":"Diesel Mechanic","company":{"display_name":"Mining Co"},"location":{"display_name":"Perth"},"description":"Heavy diesel mechanic maintenance","redirect_url":"https://adzuna.example/jobs/1","category":{"label":"Engineering"},"created":"2026-11-14T10:00:00Z"}]}"""
+        ))
+        val result = client.searchAdzuna("diesel mechanic", listOf("AU"), "test-app-id", "test-app-key", 10)
+        assertNull(result.error)
+        assertEquals(1, result.jobs.size)
+        assertEquals("Mining Co", result.jobs.single().company)
+        assertEquals("AU", result.jobs.single().country)
+        assertEquals("https://adzuna.example/jobs/1", result.jobs.single().sourceUrl)
+        val request = server.takeRequest()
+        assertEquals("/adzuna/jobs/au/search/1", request.requestUrl?.encodedPath)
+        assertEquals("test-app-id", request.requestUrl?.queryParameter("app_id"))
+        assertEquals("test-app-key", request.requestUrl?.queryParameter("app_key"))
+    }
+
+    @Test fun rejectsInsecureAdzunaRedirectLinks() {
+        server.enqueue(MockResponse().setResponseCode(200).setBody(
+            """{"results":[{"title":"Diesel Mechanic","company":{"display_name":"Mining Co"},"location":{"display_name":"Perth"},"description":"Heavy diesel mechanic","redirect_url":"http://adzuna.example/jobs/1"}]}"""
+        ))
+        val result = client.searchAdzuna("diesel mechanic", listOf("Australia"), "id", "key")
         assertTrue(result.jobs.isEmpty())
     }
 
