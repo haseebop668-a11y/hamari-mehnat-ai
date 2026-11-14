@@ -290,9 +290,8 @@ fun JobsScreen(context: Context) {
         }
         Divider(color = Color(0xFF303945))
         NzVerificationPanel(context)
-
+    }
 }
-
 
 @Composable
 private fun NzVerificationPanel(context: Context) {
