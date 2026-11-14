@@ -70,6 +70,7 @@ object ApplicationPdfGenerator {
                 var y = top
 
                 fun startPage() {
+                    y = top
                     pageNumber += 1
                     page = document.startPage(PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create())
                     canvas = page!!.canvas
