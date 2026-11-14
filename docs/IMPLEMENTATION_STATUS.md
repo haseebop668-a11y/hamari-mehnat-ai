@@ -9,11 +9,12 @@ This document distinguishes code present in the branch from checks that still re
 ### Implemented in source
 - Country registry for New Zealand, Australia, United Kingdom, Germany and Canada.
 - Shared public-feed adapters: Arbeitnow, Remotive, Himalayas and Jobicy; optional company-specific Greenhouse and Lever public boards.
+- Shared vacancy freshness policy removes expired listings and deduplicates stable job IDs before UI display and scheduled saving.
 - NZ job-board browser hand-off links: SEEK NZ, Tradestaff, Trade Assist and Enterprise Recruitment. These are official/source-site links, not claimed API integrations.
 - NZ public accredited-employer lookup using the search endpoint currently used by Immigration New Zealand's own public employer-search page.
 - Exact 13-digit NZBN matching, accreditation-expiry parsing, exact-name results requiring NZBN confirmation, checked timestamp and official-source link.
 - Conservative no-result handling: a missing public result is inconclusive because some accredited employers opt out of publication.
-- AEWV contract text checklist: identity, role, work location, duties, hours, pay, pay period, overtime, leave, duration, missing fields, trial-period wording, potential unlawful deductions, bonding/repayment clauses, worker-paid job fees, passport-retention wording and employer/job-title mismatches.
+- AEWV contract text checklist: identity, role, work location, duties, hours, pay, pay period, overtime, leave, duration, missing fields, trial-period wording, potential unlawful deductions, bonding/repayment clauses, worker-paid job fees, passport-retention wording and employer/job-title/location/pay mismatches.
 - Matching synonyms for civil labour, roadworks, plant operation, painting, maintenance, transport/logistics and scaffolding.
 - Unit tests for NZ employer result parsing, no-result responses, invalid NZBN input and contract risk rules.
 
