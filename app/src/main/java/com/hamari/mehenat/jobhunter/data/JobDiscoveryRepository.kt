@@ -43,9 +43,17 @@ class JobDiscoveryRepository(context: Context) {
         query: String,
         countries: List<String>,
         greenhouseBoards: List<String> = emptyList(),
-        leverSites: List<String> = emptyList()
+        leverSites: List<String> = emptyList(),
+        adzunaCredentials: AdzunaCredentials? = null
     ): List<SourceResult> {
         val results = mutableListOf<SourceResult>()
+        if (adzunaCredentials != null) {
+            results += if (limiter.tryAcquire("adzuna", 10)) {
+                api.searchAdzuna(query, countries, adzunaCredentials.appId, adzunaCredentials.appKey)
+            } else {
+                SourceResult("Adzuna", emptyList(), "Local Adzuna safety cap reached: 10 country-search requests per UTC day.")
+            }
+        }
         results += if (limiter.tryAcquire("arbeitnow", 6, 60 * 60 * 1000L)) {
             api.searchArbeitnow(query, countries)
         } else {
