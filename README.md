@@ -20,8 +20,8 @@ A private, single-owner Android application for international job discovery and 
 - **Matching:** deterministic role/skill/country relevance scoring with cautious sponsorship wording, NZ trade-role synonyms, expired-listing filtering and stable-ID deduplication. A sponsorship signal is not a guarantee of sponsorship or visa eligibility.
 - **Local specialist agents:** CV analyst, job-match analyst, CV tailoring, cover-letter drafting, employer outreach drafting, interview coaching and official-source visa explanation. These are prompt-specialized workflows using one local model; the app does not claim to train a foundation model from personal documents.
 - **Employer outreach:** browser-based employer research and user-reviewed email drafts opened in the user's email app. The app does not send automatically or read the user's inbox.
-- **Tracker:** saved jobs, application stages, employer contact/response notes and local interview history.
-- **Interview reminders:** local notification scheduled one hour before the interview in the entered time zone.
+- **Tracker:** saved jobs, application stages, employer contact/response notes and local interview history; personal text fields are encrypted at rest and progressed applications survive vacancy expiry.
+- **Interview reminders:** local notification scheduled one hour before the interview in the entered time zone; WorkManager persists only the interview ID and reads details from the encrypted local store.
 - **Visa/work-permit research:** fetches bounded excerpts from registered official government pages, records retrieval timestamps and stores the evidence locally for the visa specialist agent.
 - **New Zealand employer checks:** searches the public accredited-employer register endpoint used by Immigration New Zealand's own search page, checks exact NZBN matches and published accreditation expiry, and links back to INZ. Name-only matches require NZBN confirmation; no public match is inconclusive because some employers opt out of publication.
 - **AEWV agreement review:** checks pasted or extracted contract text for missing core terms, weekly hours, pay, trial-period wording, employer/job-title mismatches and common exploitation red flags. This is a first-pass checklist, not legal advice.
@@ -94,7 +94,7 @@ A successful CI build does not replace a real-device test of model download, RAM
 - No API keys are required for the included public feeds.
 - No analytics SDK or cloud AI provider is included.
 - Android backup is disabled and cleartext HTTP is disabled.
-- Personal documents are encrypted at rest in app-private storage.
+- Profile, documents and personal tracker/interview text fields are encrypted at rest in app-private storage with Android Keystore AES-GCM.
 - The repository currently contains application source only. Change repository visibility to Private before adding any private project materials or secrets.
 
 ## Existing prototype
