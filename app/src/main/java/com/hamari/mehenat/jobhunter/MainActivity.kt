@@ -152,7 +152,7 @@ private fun HomeScreen(context: Context) {
         }
         Text("BUILD STATUS", color = Gold, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         StatusRow("Android application", "Native Kotlin and Jetpack Compose", true)
-        StatusRow("Local AI model runtime", if (downloadedModel) "Model file present; checksum checked on load" else "llama.cpp integrated; model not downloaded", true)
+        StatusRow("Local AI model", if (downloadedModel) "Model file present; checksum checked on load" else "llama.cpp integrated; download model to enable on-device AI", downloadedModel)
         StatusRow("Encrypted document vault", "Android Keystore AES-GCM • PDF / DOCX / TXT extraction", true)
         StatusRow("Job search and matching engine", "Public feeds • company boards • relevance and sponsorship signals", true)
         StatusRow("Interview and visa intelligence", "Local reminders • official government page fetcher", true)
