@@ -115,6 +115,7 @@ class EmploymentContractAnalyzer {
         if (!expectedJobTitle.isNullOrBlank() && !normalized.contains(expectedJobTitle.lowercase(Locale.ROOT))) {
             findings += ContractFinding("job_title_mismatch", "Job title mismatch", "The expected job title was not found in the contract text. Compare the signed agreement, job description and job-check role.", ContractFindingSeverity.HIGH_RISK, ContractCheckStatus.FLAGGED)
         }
+        findings += ContractFinding("signed_job_offer", "Signed job offer evidence", "A separate signed job offer is required for an AEWV application. Confirm you have the signed offer and that its employer, role, location, pay and hours match this agreement.", ContractFindingSeverity.WARNING, ContractCheckStatus.REVIEW_REQUIRED)
         findings += ContractFinding("job_check_status", "Specific job-check approval", "A contract cannot prove that this exact role, location and conditions have an approved INZ job check. Request the employer's job-check evidence and confirm with INZ.", ContractFindingSeverity.WARNING, ContractCheckStatus.REVIEW_REQUIRED)
         findings += ContractFinding("market_rate", "Market-rate comparison", "This tool does not fetch a live occupation-specific market-rate benchmark. Compare the guaranteed pay against current official guidance and the actual role.", ContractFindingSeverity.WARNING, ContractCheckStatus.REVIEW_REQUIRED)
 
