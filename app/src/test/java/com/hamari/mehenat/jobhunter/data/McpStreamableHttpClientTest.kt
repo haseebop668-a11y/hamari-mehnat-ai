@@ -5,10 +5,10 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.OkHttpClient
 import okhttp3.tls.HandshakeCertificates
 import okhttp3.tls.HeldCertificate
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -30,27 +30,44 @@ class McpStreamableHttpClientTest {
 
     @After fun tearDown() { server.shutdown() }
 
-    @Test fun initializesAndListsOnlyExplicitlyReadOnlyTools() {
-        enqueueInitialize()
-        server.enqueue(MockResponse().setResponseCode(202))
-        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
-            .setBody("""{"jsonrpc":"2.0","id":2,"result":{"tools":[
-                {"name":"search_jobs","description":"Search public listings","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object"}},
-                {"name":"submit_application","annotations":{"readOnlyHint":false}},
-                {"name":"delete_record","annotations":{"readOnlyHint":true,"destructiveHint":true}}
-            ]}}"""))
+    @Test fun discoversCurrentProtocolAndListsOnlyExplicitlyReadOnlyTools() {
+        enqueueModernDiscovery()
+        server.enqueue(jsonResponse(2, JSONObject().put("resultType", "complete").put("tools", JSONArray().put(
+            JSONObject()
+                .put("name", "search_jobs")
+                .put("description", "Search public listings")
+                .put("annotations", JSONObject().put("readOnlyHint", true))
+                .put("inputSchema", JSONObject().put("type", "object"))
+        ).put(
+            JSONObject().put("name", "submit_application")
+                .put("annotations", JSONObject().put("readOnlyHint", false))
+        ).put(
+            JSONObject().put("name", "delete_record")
+                .put("annotations", JSONObject().put("readOnlyHint", true).put("destructiveHint", true))
+        ))))
         assertEquals("Example MCP", client.connect())
         val tools = client.listReadOnlyTools()
         assertEquals(1, tools.size)
         assertEquals("search_jobs", tools.first().name)
         assertTrue(tools.first().readOnly)
+        val discoverRequest = server.takeRequest()
+        assertEquals("2026-07-28", discoverRequest.getHeader("MCP-Protocol-Version"))
+        assertEquals("server/discover", discoverRequest.getHeader("Mcp-Method"))
+        val discoverBody = JSONObject(discoverRequest.body.readUtf8())
+        assertEquals(
+            "2026-07-28",
+            discoverBody.getJSONObject("params").getJSONObject("_meta")
+                .getString("io.modelcontextprotocol/protocolVersion")
+        )
+        assertEquals("tools/list", server.takeRequest().getHeader("Mcp-Method"))
     }
 
     @Test fun refusesToCallToolsWithoutReadOnlyAnnotation() {
-        enqueueInitialize()
-        server.enqueue(MockResponse().setResponseCode(202))
-        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
-            .setBody("""{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"send_email","annotations":{"readOnlyHint":false}}]}}"""))
+        enqueueModernDiscovery()
+        server.enqueue(jsonResponse(2, JSONObject().put("resultType", "complete").put("tools", JSONArray().put(
+            JSONObject().put("name", "send_email")
+                .put("annotations", JSONObject().put("readOnlyHint", false))
+        ))))
         client.connect()
         try {
             client.callReadOnlyTool("send_email", JSONObject())
@@ -58,7 +75,7 @@ class McpStreamableHttpClientTest {
         } catch (expected: IllegalStateException) {
             assertTrue(expected.message.orEmpty().contains("approved read-only"))
         }
-        assertEquals(3, server.requestCount)
+        assertEquals(2, server.requestCount)
     }
 
     @Test fun requiresHttpsAndRejectsEmbeddedCredentials() {
@@ -76,36 +93,24 @@ class McpStreamableHttpClientTest {
         }
     }
 
-
     @Test fun parsesMultipleSseEventsAndMultilineDataUntilMatchingResponseId() {
-        enqueueInitialize()
-        server.enqueue(MockResponse().setResponseCode(202))
-        server.enqueue(
-            MockResponse()
-                .setHeader("Content-Type", "text/event-stream")
-                .setChunkedBody(
-                    "data: {\n" +
-                    "data: \"jsonrpc\": \"2.0\",\n" +
-                    "data: \"method\": \"notifications/progress\",\n" +
-                    "data: \"params\": {}\n" +
-                    "data: }\n\n" +
-                    "data: {\n" +
+        enqueueModernDiscovery()
+        server.enqueue(MockResponse().setHeader("Content-Type", "text/event-stream")
+            .setChunkedBody(
+                "data: {\n" +
                     "data: \"jsonrpc\": \"2.0\",\n" +
                     "data: \"id\": 2,\n" +
-                    "data: \"result\": {\"tools\": []}\n" +
+                    "data: \"result\": {\"resultType\":\"complete\",\"tools\":[]}\n" +
                     "data: }\n\n",
-                    64
-                )
-        )
+                64
+            ))
         client.connect()
         assertTrue(client.listReadOnlyTools().isEmpty())
     }
 
     @Test fun rejectsJsonRpcResponsesWithMismatchedIds() {
-        enqueueInitialize()
-        server.enqueue(MockResponse().setResponseCode(202))
-        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
-            .setBody("{\"jsonrpc\":\"2.0\",\"id\":99,\"result\":{\"tools\":[]}}"))
+        enqueueModernDiscovery()
+        server.enqueue(jsonResponse(99, JSONObject().put("resultType", "complete").put("tools", JSONArray())))
         client.connect()
         try {
             client.listReadOnlyTools()
@@ -116,9 +121,9 @@ class McpStreamableHttpClientTest {
     }
 
     @Test fun rejectsChunkedResponseBodiesLargerThanOneMegabyte() {
-        enqueueInitialize()
-        server.enqueue(MockResponse().setResponseCode(202))
-        val oversized = "{\"data\":\"" + "x".repeat(1_048_600) + "\"}"
+        enqueueModernDiscovery()
+        val oversized = "{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"resultType\":\"complete\",\"data\":\"" +
+            "x".repeat(1_048_600) + "\"}}"
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
             .setChunkedBody(oversized, 8192))
         client.connect()
@@ -130,35 +135,126 @@ class McpStreamableHttpClientTest {
         }
     }
 
+    @Test fun fallsBackToLegacyHandshakeWhenModernEndpointIsNotSupported() {
+        enqueueLegacyFallback()
+        assertEquals("Legacy example", client.connect())
+        val probe = server.takeRequest()
+        assertEquals("server/discover", probe.getHeader("Mcp-Method"))
+        val initialize = server.takeRequest()
+        assertEquals("initialize", JSONObject(initialize.body.readUtf8()).getString("method"))
+        assertEquals(null, initialize.getHeader("Mcp-Method"))
+        val notification = server.takeRequest()
+        assertEquals("2025-11-25", notification.getHeader("MCP-Protocol-Version"))
+    }
 
-    @Test fun rejectsAnUnsupportedNegotiatedProtocolVersion() {
-        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
-            .setHeader("Mcp-Session-Id", "session-123")
-            .setBody("""{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"Old server","version":"1"}}}"""))
-        try {
-            client.connect()
-            throw AssertionError("Expected unsupported MCP protocol version to be rejected")
-        } catch (expected: IllegalStateException) {
-            assertTrue(expected.message.orEmpty().contains("unsupported protocol version"))
-        }
+    @Test fun negotiatesAdvertisedLegacyVersionFromModernVersionError() {
+        val unsupported = JSONObject()
+            .put("jsonrpc", "2.0")
+            .put("id", 1)
+            .put("error", JSONObject()
+                .put("code", -32022)
+                .put("message", "Unsupported protocol version")
+                .put("data", JSONObject()
+                    .put("supported", JSONArray().put("2025-11-25"))
+                    .put("requested", "2026-07-28")))
+        server.enqueue(MockResponse().setResponseCode(400)
+            .setHeader("Content-Type", "application/json")
+            .setBody(unsupported.toString()))
+        enqueueLegacyInitializeOnly()
+        assertEquals("Legacy example", client.connect())
     }
 
     @Test fun paginatesToolDiscoveryAndReturnsOnlySafeAdvertisedTools() {
-        enqueueInitialize()
-        server.enqueue(MockResponse().setResponseCode(202))
-        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
-            .setBody("""{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"search_jobs","annotations":{"readOnlyHint":true}}],"nextCursor":"page-two"}}"""))
-        server.enqueue(MockResponse().setResponseCode(202))
-        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
-            .setBody("""{"jsonrpc":"2.0","id":3,"result":{"tools":[{"name":"read_company","annotations":{"readOnlyHint":true}},{"name":"send_email","annotations":{"readOnlyHint":false}}]}}"""))
+        enqueueModernDiscovery()
+        server.enqueue(jsonResponse(2, JSONObject().put("resultType", "complete")
+            .put("tools", JSONArray().put(
+                JSONObject().put("name", "search_jobs")
+                    .put("annotations", JSONObject().put("readOnlyHint", true))
+            )).put("nextCursor", "page-two")))
+        server.enqueue(jsonResponse(3, JSONObject().put("resultType", "complete")
+            .put("tools", JSONArray().put(
+                JSONObject().put("name", "read_company")
+                    .put("annotations", JSONObject().put("readOnlyHint", true))
+            ).put(
+                JSONObject().put("name", "send_email")
+                    .put("annotations", JSONObject().put("readOnlyHint", false))
+            ))))
         client.connect()
         val tools = client.listReadOnlyTools()
         assertEquals(listOf("search_jobs", "read_company"), tools.map { it.name })
     }
 
-    private fun enqueueInitialize() {
+    @Test fun sendsRequiredStandardAndCustomParameterHeadersForModernToolCalls() {
+        enqueueModernDiscovery()
+        val tool = JSONObject()
+            .put("name", "lookup_company")
+            .put("annotations", JSONObject().put("readOnlyHint", true))
+            .put("inputSchema", JSONObject().put("type", "object")
+                .put("properties", JSONObject()
+                    .put("region", JSONObject().put("type", "string").put("x-mcp-header", "Region"))
+                    .put("query", JSONObject().put("type", "string"))))
+        server.enqueue(jsonResponse(2, JSONObject().put("resultType", "complete")
+            .put("tools", JSONArray().put(tool))))
+        server.enqueue(jsonResponse(3, JSONObject().put("resultType", "complete")
+            .put("content", JSONArray().put(JSONObject().put("type", "text").put("text", "Found company")))))
+        client.connect()
+        val result = client.callReadOnlyTool("lookup_company", JSONObject()
+            .put("region", "west-1")
+            .put("query", "Example Ltd"))
+        assertEquals("Found company", result)
+        assertEquals("server/discover", server.takeRequest().getHeader("Mcp-Method"))
+        assertEquals("tools/list", server.takeRequest().getHeader("Mcp-Method"))
+        val toolRequest = server.takeRequest()
+        assertEquals("tools/call", toolRequest.getHeader("Mcp-Method"))
+        assertEquals("lookup_company", toolRequest.getHeader("Mcp-Name"))
+        assertEquals("west-1", toolRequest.getHeader("Mcp-Param-Region"))
+    }
+
+    @Test fun excludesToolsWithInvalidCustomHeaderAnnotations() {
+        enqueueModernDiscovery()
+        val tool = JSONObject()
+            .put("name", "invalid_header")
+            .put("annotations", JSONObject().put("readOnlyHint", true))
+            .put("inputSchema", JSONObject().put("type", "object")
+                .put("properties", JSONObject().put("items", JSONObject().put("type", "array")
+                    .put("items", JSONObject().put("type", "string").put("x-mcp-header", "Region")))))
+        server.enqueue(jsonResponse(2, JSONObject().put("resultType", "complete")
+            .put("tools", JSONArray().put(tool))))
+        client.connect()
+        assertTrue(client.listReadOnlyTools().isEmpty())
+    }
+
+    private fun enqueueModernDiscovery() {
+        val discoveryResult = JSONObject()
+            .put("resultType", "complete")
+            .put("supportedVersions", JSONArray().put("2026-07-28"))
+            .put("capabilities", JSONObject().put("tools", JSONObject()))
+            .put("_meta", JSONObject().put(
+                "io.modelcontextprotocol/serverInfo",
+                JSONObject().put("name", "Example MCP").put("version", "1.0")
+            ))
+            .put("ttlMs", 0)
+            .put("cacheScope", "public")
+        server.enqueue(jsonResponse(1, discoveryResult))
+    }
+
+    private fun enqueueLegacyFallback() {
+        server.enqueue(MockResponse().setResponseCode(404).setBody("Legacy MCP endpoint"))
+        enqueueLegacyInitializeOnly()
+    }
+
+    private fun enqueueLegacyInitializeOnly() {
+        val result = JSONObject()
+            .put("protocolVersion", "2025-11-25")
+            .put("capabilities", JSONObject().put("tools", JSONObject()))
+            .put("serverInfo", JSONObject().put("name", "Legacy example").put("version", "1.0"))
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
             .setHeader("Mcp-Session-Id", "session-123")
-            .setBody("""{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"Example MCP","version":"1.0"}}}"""))
+            .setBody(JSONObject().put("jsonrpc", "2.0").put("id", 2).put("result", result).toString()))
+        server.enqueue(MockResponse().setResponseCode(202))
     }
+
+    private fun jsonResponse(id: Int, result: JSONObject): MockResponse =
+        MockResponse().setHeader("Content-Type", "application/json")
+            .setBody(JSONObject().put("jsonrpc", "2.0").put("id", id).put("result", result).toString())
 }
