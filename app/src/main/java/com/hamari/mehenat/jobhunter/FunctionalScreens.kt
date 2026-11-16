@@ -548,7 +548,7 @@ fun FilesScreen(context: Context) {
                                     extractedFileName = stored.document.originalName
                                     extractedContractReport = null
                                     cvPreview = extracted.text.take(2200)
-                                    message = "Extracted ${extracted.text.length} characters from ${extracted.format} and saved the extracted text encrypted in your profile."
+                                    message = "Extracted ${extracted.text.length} characters from ${extracted.format} and saved the extracted text encrypted in your profile." + (extracted.warning?.let { " Note: $it" } ?: "")
                                 } catch (e: Exception) {
                                     message = "Text extraction failed: ${e.message ?: e.javaClass.simpleName}"
                                 }
