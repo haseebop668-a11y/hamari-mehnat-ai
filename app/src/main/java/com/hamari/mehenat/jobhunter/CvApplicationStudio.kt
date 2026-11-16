@@ -76,6 +76,7 @@ fun CvApplicationStudio(context: Context) {
     var progress by remember { mutableIntStateOf(0) }
     var modelReady by remember { mutableStateOf(false) }
     var followUps by remember { mutableStateOf<List<String>>(emptyList()) }
+    var reviewedCriteria by remember { mutableStateOf("") }
     var followUpIndex by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf("") }
     var documentKind by remember { mutableStateOf("CV") }
@@ -251,11 +252,18 @@ fun CvApplicationStudio(context: Context) {
                             Button(
                                 onClick = {
                                     runLocalTask("Checking the vacancy and preparing a few useful follow-up questions…") {
-                                        val evidence = JSONObject(profile.toString()).toString().take(5000)
+                                        val cleanedProfile = JSONObject(profile.toString())
+                                        val staleKeys = cleanedProfile.keys().asSequence().filter { it.startsWith("cv_followup_") }.toList()
+                                        staleKeys.forEach { cleanedProfile.remove(it) }
+                                        saveProfile(cleanedProfile)
+                                        followUps = emptyList()
+                                        followUpIndex = 0
+                                        reviewedCriteria = ""
+                                        val evidence = cleanedProfile.toString().take(5000)
                                         val output = withContext(Dispatchers.IO) {
                                             LocalAgentOrchestrator().execute(
                                                 PersonalAgent.CV_ANALYST,
-                                                "Read the vacancy criteria and candidate profile. Return ONLY a JSON array of 0 to 5 short, specific questions that would materially improve this CV. Ask only about facts not already supplied: relevant tasks, equipment, measurable achievements, safety tickets, licences, availability or work rights when relevant. Never suggest the candidate has a credential. Format: [\"question one\",\"question two\"]. If no extra facts are needed return []. Vacancy: $criteria",
+                                                "Read the vacancy criteria and candidate profile. Return ONLY a JSON array of 0 to 5 short, specific questions that would materially improve this CV. Ask only about facts not already supplied: relevant tasks, equipment, measurable achievements, safety tickets, licences, availability or work rights when relevant. Never suggest the candidate has a credential. Format: [\"question one\",\"question two\"]. If no extra facts are needed return []. Vacancy: ${criteria.take(1600)}",
                                                 evidence,
                                                 criteria.take(5000),
                                                 300
@@ -264,6 +272,7 @@ fun CvApplicationStudio(context: Context) {
                                         val questions = CvQuestionParser.parse(output)
                                         followUps = questions
                                         followUpIndex = 0
+                                        reviewedCriteria = criteria
                                         status = if (questions.isEmpty()) "No extra questions were returned. You can create your tailored draft now." else "The AI found ${questions.size} extra details that may strengthen this application."
                                     }
                                 },
@@ -284,6 +293,9 @@ fun CvApplicationStudio(context: Context) {
                         FilterChip(selected = documentKind == "CV", onClick = { documentKind = "CV" }, label = { Text("Tailored CV") })
                         FilterChip(selected = documentKind == "Cover Letter", onClick = { documentKind = "Cover Letter" }, label = { Text("Cover letter") })
                     }
+                    if (reviewedCriteria != criteria) {
+                        Text("Review this vacancy first so the AI can ask about missing job-specific evidence.", color = FieldbookPalette.Rust, fontSize = 10.sp)
+                    }
                     Button(
                         onClick = {
                             runLocalTask("Preparing your private model and writing a CV for this role…") {
@@ -299,7 +311,7 @@ fun CvApplicationStudio(context: Context) {
                                 val output = withContext(Dispatchers.IO) {
                                     val agent = if (documentKind == "CV") PersonalAgent.CV_TAILOR else PersonalAgent.COVER_LETTER
                                     val instruction = if (documentKind == "CV") {
-                                        "Create a polished, ATS-readable CV with clear headings and bullet points. Prioritize vacancy criteria and map each requirement to truthful candidate evidence. Never invent employers, dates, qualifications, licences, work rights, achievements or experience. Mark material gaps as [CANDIDATE TO CONFIRM]. Target role: ${targetRole.ifBlank { "As described in the vacancy" }}. Vacancy criteria:\n$criteria"
+                                        "Create a polished, ATS-readable CV with clear headings and bullet points. Prioritize vacancy criteria and map each requirement to truthful candidate evidence. Never invent employers, dates, qualifications, licences, work rights, achievements or experience. Mark material gaps as [CANDIDATE TO CONFIRM]. Target role: ${targetRole.take(120).ifBlank { "As described in the vacancy" }}. Vacancy criteria:\n${criteria.take(1600)}"
                                     } else {
                                         "Write a warm, professional, concise cover letter tailored to this vacancy. Use only candidate facts, explain transferable skills honestly, never invent experience, qualifications, licences or work rights, and mark missing details as [CANDIDATE TO CONFIRM]. Target role: ${targetRole.ifBlank { "As described in the vacancy" }}. Vacancy criteria:\n$criteria"
                                     }
@@ -317,7 +329,7 @@ fun CvApplicationStudio(context: Context) {
                                 status = "Your draft is ready and saved privately. Check every fact before exporting or sharing."
                             }
                         },
-                        enabled = missing == null && currentFollowUp == null && criteria.isNotBlank() && !busy,
+                        enabled = missing == null && currentFollowUp == null && criteria.isNotBlank() && reviewedCriteria == criteria && !busy,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(if (busy) "Creating your document…" else "Create my tailored $documentKind") }
                     if (busy && progress > 0) LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth(), color = FieldbookPalette.Forest, trackColor = FieldbookPalette.PaperShade)
