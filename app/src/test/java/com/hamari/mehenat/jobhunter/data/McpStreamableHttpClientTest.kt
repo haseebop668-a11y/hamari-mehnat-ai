@@ -95,15 +95,26 @@ class McpStreamableHttpClientTest {
 
     @Test fun parsesMultipleSseEventsAndMultilineDataUntilMatchingResponseId() {
         enqueueModernDiscovery()
-        server.enqueue(MockResponse().setHeader("Content-Type", "text/event-stream")
-            .setChunkedBody(
-                "data: {\n" +
-                    "data: \"jsonrpc\": \"2.0\",\n" +
-                    "data: \"id\": 2,\n" +
-                    "data: \"result\": {\"resultType\":\"complete\",\"tools\":[]}\n" +
-                    "data: }\n\n",
-                64
-            ))
+        val progressEvent = JSONObject()
+            .put("jsonrpc", "2.0")
+            .put("method", "notifications/progress")
+            .put("params", JSONObject())
+            .toString()
+        val responseEvent = JSONObject()
+            .put("jsonrpc", "2.0")
+            .put("id", 2)
+            .put(
+                "result",
+                JSONObject().put("resultType", "complete").put("tools", JSONArray())
+            )
+            .toString(2)
+        val sseBody = "data: $progressEvent\n\n" +
+            responseEvent.lineSequence().joinToString("\n") { "data: $it" } + "\n\n"
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setChunkedBody(sseBody, 64)
+        )
         client.connect()
         assertTrue(client.listReadOnlyTools().isEmpty())
     }
