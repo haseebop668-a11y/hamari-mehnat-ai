@@ -114,6 +114,15 @@ fun ConnectorHub(
             Text("Greenhouse and Lever are public company-board endpoints. Add board IDs/site names; these do not use a personal account login.", color = FieldbookPalette.Muted, fontSize = 11.sp)
             OutlinedTextField(greenhouseBoards, onGreenhouseBoardsChange, label = { Text("Greenhouse board IDs (comma separated)") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(leverSites, onLeverSitesChange, label = { Text("Lever site names (comma separated)") }, modifier = Modifier.fillMaxWidth())
+            ConnectorToggle("Greenhouse boards", if (greenhouseBoards.isBlank()) "Enter board IDs above before enabling" else "Company-specific public ATS feed", "greenhouse" in enabledIds, { enabled ->
+                if (enabled && greenhouseBoards.isBlank()) message = "Add at least one Greenhouse board ID before enabling this connector."
+                else setEnabled("greenhouse", enabled)
+            })
+            ConnectorToggle("Lever boards", if (leverSites.isBlank()) "Enter site names above before enabling" else "Company-specific public ATS feed", "lever" in enabledIds, { enabled ->
+                if (enabled && leverSites.isBlank()) message = "Add at least one Lever site name before enabling this connector."
+                else setEnabled("lever", enabled)
+            })
+            Text("LinkedIn, Indeed, SEEK and EURES remain browser hand-offs, not account-connected API integrations. Use their official sites directly; this app does not scrape private accounts.", color = FieldbookPalette.Muted, fontSize = 10.sp)
             Text(message, color = FieldbookPalette.Muted, fontSize = 11.sp)
         }
     }
