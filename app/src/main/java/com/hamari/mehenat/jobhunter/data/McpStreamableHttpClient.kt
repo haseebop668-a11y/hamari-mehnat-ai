@@ -38,7 +38,7 @@ class McpStreamableHttpClient(
 ) {
     private val ids = AtomicInteger(1)
     private var sessionId: String? = null
-    private var protocolVersion = "2025-11-25"
+    private var protocolVersion = SUPPORTED_PROTOCOL_VERSION
     private var initialized = false
 
     init {
@@ -61,7 +61,9 @@ class McpStreamableHttpClient(
         )
         val result = response.getJSONObject("result")
         val negotiated = result.optString("protocolVersion")
-        check(negotiated.isNotBlank()) { "MCP server did not negotiate a protocol version." }
+        check(negotiated == SUPPORTED_PROTOCOL_VERSION) {
+            "MCP server selected unsupported protocol version: ${negotiated.ifBlank { "missing" }}."
+        }
         protocolVersion = negotiated
         initialized = true
         notifyInitialized()
@@ -92,23 +94,43 @@ class McpStreamableHttpClient(
     @Synchronized
     fun listReadOnlyTools(): List<McpToolDescriptor> {
         check(initialized) { "Connect to the MCP server first." }
-        val result = request("tools/list", JSONObject()).getJSONObject("result")
-        val tools = result.optJSONArray("tools") ?: JSONArray()
-        return (0 until tools.length()).mapNotNull { index ->
-            val item = tools.optJSONObject(index) ?: return@mapNotNull null
-            val annotations = item.optJSONObject("annotations") ?: JSONObject()
-            val readOnly = annotations.optBoolean("readOnlyHint", false) &&
-                !annotations.optBoolean("destructiveHint", false)
-            if (!readOnly) return@mapNotNull null
-            val name = item.optString("name").takeIf { it.matches(Regex("[A-Za-z0-9_.-]{1,128}")) }
-                ?: return@mapNotNull null
-            McpToolDescriptor(
-                name = name,
-                description = item.optString("description").take(1000),
-                inputSchema = item.optJSONObject("inputSchema") ?: JSONObject().put("type", "object"),
-                readOnly = true
-            )
-        }.take(50)
+        val discovered = linkedMapOf<String, McpToolDescriptor>()
+        val seenCursors = mutableSetOf<String>()
+        var cursor: String? = null
+
+        for (page in 0 until MAX_TOOL_LIST_PAGES) {
+            val params = JSONObject()
+            cursor?.let { params.put("cursor", it) }
+            val result = request("tools/list", params).getJSONObject("result")
+            val tools = result.optJSONArray("tools") ?: JSONArray()
+            for (index in 0 until tools.length()) {
+                val item = tools.optJSONObject(index) ?: continue
+                val annotations = item.optJSONObject("annotations") ?: JSONObject()
+                val readOnly = annotations.optBoolean("readOnlyHint", false) &&
+                    !annotations.optBoolean("destructiveHint", false)
+                if (!readOnly) continue
+                val name = item.optString("name").takeIf {
+                    it.matches(Regex("[A-Za-z0-9_.-]{1,128}"))
+                } ?: continue
+                discovered.putIfAbsent(
+                    name,
+                    McpToolDescriptor(
+                        name = name,
+                        description = item.optString("description").take(1000),
+                        inputSchema = item.optJSONObject("inputSchema") ?: JSONObject().put("type", "object"),
+                        readOnly = true
+                    )
+                )
+                if (discovered.size >= MAX_TOOLS) return discovered.values.toList()
+            }
+
+            val nextCursor = result.opt("nextCursor") as? String
+            if (nextCursor.isNullOrBlank()) return discovered.values.toList()
+            check(seenCursors.add(nextCursor)) { "MCP tools/list returned a repeated pagination cursor." }
+            cursor = nextCursor
+        }
+        check(cursor == null) { "MCP tools/list exceeded the pagination safety limit." }
+        return discovered.values.toList()
     }
 
     @Synchronized
@@ -278,6 +300,9 @@ class McpStreamableHttpClient(
 
     companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+        private const val SUPPORTED_PROTOCOL_VERSION = "2025-11-25"
         private const val MAX_RESPONSE_BYTES = 1_048_576
+        private const val MAX_TOOL_LIST_PAGES = 10
+        private const val MAX_TOOLS = 50
     }
 }

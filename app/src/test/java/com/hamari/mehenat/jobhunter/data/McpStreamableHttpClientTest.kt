@@ -130,6 +130,32 @@ class McpStreamableHttpClientTest {
         }
     }
 
+
+    @Test fun rejectsAnUnsupportedNegotiatedProtocolVersion() {
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+            .setHeader("Mcp-Session-Id", "session-123")
+            .setBody("""{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"Old server","version":"1"}}}"""))
+        try {
+            client.connect()
+            throw AssertionError("Expected unsupported MCP protocol version to be rejected")
+        } catch (expected: IllegalStateException) {
+            assertTrue(expected.message.orEmpty().contains("unsupported protocol version"))
+        }
+    }
+
+    @Test fun paginatesToolDiscoveryAndReturnsOnlySafeAdvertisedTools() {
+        enqueueInitialize()
+        server.enqueue(MockResponse().setResponseCode(202))
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+            .setBody("""{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"search_jobs","annotations":{"readOnlyHint":true}}],"nextCursor":"page-two"}}"""))
+        server.enqueue(MockResponse().setResponseCode(202))
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+            .setBody("""{"jsonrpc":"2.0","id":3,"result":{"tools":[{"name":"read_company","annotations":{"readOnlyHint":true}},{"name":"send_email","annotations":{"readOnlyHint":false}}]}}"""))
+        client.connect()
+        val tools = client.listReadOnlyTools()
+        assertEquals(listOf("search_jobs", "read_company"), tools.map { it.name })
+    }
+
     private fun enqueueInitialize() {
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
             .setHeader("Mcp-Session-Id", "session-123")

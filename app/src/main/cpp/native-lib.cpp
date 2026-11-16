@@ -119,6 +119,18 @@ Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_nativeGenerate(
     if (token_count <= 0 || token_count > static_cast<int32_t>(tokens.size())) {
         return env->NewStringUTF("Prompt tokenization failed or exceeded context.");
     }
+    const uint32_t context_capacity = llama_n_ctx(g_context);
+    if (static_cast<uint32_t>(token_count) >= context_capacity) {
+        return env->NewStringUTF("The prompt is too long for the local model context. Shorten the job description or profile.");
+    }
+    const int requested_limit = std::clamp(max_tokens, 1, 512);
+    const int generation_limit = std::min(
+        requested_limit,
+        static_cast<int>(context_capacity - static_cast<uint32_t>(token_count))
+    );
+    if (generation_limit <= 0) {
+        return env->NewStringUTF("No model context remains for output. Shorten the prompt.");
+    }
     tokens.resize(static_cast<size_t>(token_count));
 
     llama_batch batch = llama_batch_get_one(tokens.data(), token_count);
@@ -131,17 +143,24 @@ Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_nativeGenerate(
     llama_sampler_chain_add(sampler, llama_sampler_init_greedy());
 
     std::string output;
-    const int limit = std::clamp(max_tokens, 1, 512);
-    for (int i = 0; i < limit; ++i) {
+    bool stoppedByContext = generation_limit < requested_limit;
+    for (int i = 0; i < generation_limit; ++i) {
         const llama_token token = llama_sampler_sample(sampler, g_context, -1);
         if (llama_vocab_is_eog(g_vocab, token)) break;
         char piece[1024];
         const int32_t length = llama_token_to_piece(g_vocab, token, piece, sizeof(piece), 0, false);
         if (length > 0) output.append(piece, static_cast<size_t>(length));
         llama_sampler_accept(sampler, token);
-        if (llama_decode(g_context, llama_batch_get_one(const_cast<llama_token *>(&token), 1)) != 0) break;
+        if (i + 1 >= generation_limit) break;
+        if (llama_decode(g_context, llama_batch_get_one(const_cast<llama_token *>(&token), 1)) != 0) {
+            stoppedByContext = true;
+            break;
+        }
     }
     llama_sampler_free(sampler);
+    if (stoppedByContext) {
+        output += "\n\n[Output shortened to fit the local model context.]";
+    }
     return env->NewStringUTF(output.c_str());
 }
 

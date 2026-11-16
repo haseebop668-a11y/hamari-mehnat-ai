@@ -335,7 +335,17 @@ fun CvApplicationStudio(context: Context) {
                     if (busy && progress > 0) LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth(), color = FieldbookPalette.Forest, trackColor = FieldbookPalette.PaperShade)
                     if (draft.isNotBlank()) {
                         Text(draft, color = FieldbookPalette.Ink, fontSize = 12.sp, lineHeight = 18.sp)
-                        OutlinedButton(onClick = { pdfLauncher.launch("hamari_mehnat_cv.pdf") }, modifier = Modifier.fillMaxWidth()) { Text("Export this CV as PDF") }
+                        OutlinedButton(
+                    onClick = {
+                        val safeName = (draftTitle.ifBlank { "application_draft" })
+                            .lowercase()
+                            .replace(Regex("[^a-z0-9]+"), "_")
+                            .trim('_')
+                            .ifBlank { "application_draft" }
+                        pdfLauncher.launch("$safeName.pdf")
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Export reviewed ${documentKind.lowercase()} as PDF") }
                     }
                 }
             }
