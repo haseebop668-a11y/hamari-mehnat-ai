@@ -51,7 +51,7 @@ std::string format_prompt(const std::string & prompt) {
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_loadModel(
+Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_nativeLoadModel(
         JNIEnv * env, jobject, jstring model_path, jint context_size, jint threads) {
     std::lock_guard<std::mutex> lock(g_mutex);
     const char * path = env->GetStringUTFChars(model_path, nullptr);
@@ -89,7 +89,7 @@ Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_loadModel(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_generate(
+Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_nativeGenerate(
         JNIEnv * env, jobject, jstring prompt_text, jint max_tokens) {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (g_model == nullptr || g_context == nullptr || g_vocab == nullptr) {
@@ -146,7 +146,7 @@ Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_generate(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_unload(JNIEnv *, jobject) {
+Java_com_hamari_mehenat_jobhunter_ai_NativeLlama_nativeUnload(JNIEnv *, jobject) {
     std::lock_guard<std::mutex> lock(g_mutex);
     release_model();
 }

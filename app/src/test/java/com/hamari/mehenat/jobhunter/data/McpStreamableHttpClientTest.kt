@@ -75,9 +75,56 @@ class McpStreamableHttpClientTest {
         }
     }
 
+
+    @Test fun parsesMultipleSseEventsAndMultilineDataUntilMatchingResponseId() {
+        enqueueInitialize()
+        server.enqueue(MockResponse().setResponseCode(202))
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setChunkedBody(
+                    "data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{}}\n\n" +
+                    "data: {\"jsonrpc\":\"2.0\",\"id\":\n" +
+                    "data: 2,\"result\":{\"tools\":[]}}\n\n",
+                    64
+                )
+        )
+        client.connect()
+        assertTrue(client.listReadOnlyTools().isEmpty())
+    }
+
+    @Test fun rejectsJsonRpcResponsesWithMismatchedIds() {
+        enqueueInitialize()
+        server.enqueue(MockResponse().setResponseCode(202))
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+            .setBody("{\"jsonrpc\":\"2.0\",\"id\":99,\"result\":{\"tools\":[]}}"))
+        client.connect()
+        try {
+            client.listReadOnlyTools()
+            throw AssertionError("Expected mismatched JSON-RPC response ID to be rejected")
+        } catch (expected: IllegalStateException) {
+            assertTrue(expected.message.orEmpty().contains("ID"))
+        }
+    }
+
+    @Test fun rejectsChunkedResponseBodiesLargerThanOneMegabyte() {
+        enqueueInitialize()
+        server.enqueue(MockResponse().setResponseCode(202))
+        val oversized = "{\"data\":\"" + "x".repeat(1_048_600) + "\"}"
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+            .setChunkedBody(oversized, 8192))
+        client.connect()
+        try {
+            client.listReadOnlyTools()
+            throw AssertionError("Expected oversized chunked body to be rejected")
+        } catch (expected: IllegalStateException) {
+            assertTrue(expected.message.orEmpty().contains("1 MB"))
+        }
+    }
+
     private fun enqueueInitialize() {
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
             .setHeader("Mcp-Session-Id", "session-123")
-            .setBody("""{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-03-26","capabilities":{"tools":{}},"serverInfo":{"name":"Example MCP","version":"1.0"}}}"""))
+            .setBody("""{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"Example MCP","version":"1.0"}}}"""))
     }
 }

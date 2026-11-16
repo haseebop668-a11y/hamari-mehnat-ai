@@ -22,10 +22,21 @@ class LocalModelManager(context: Context) {
 
     fun isDownloaded(): Boolean = modelFile.isFile && modelFile.length() == EXPECTED_SIZE_BYTES
 
-    fun verifyInstalled(): Boolean {
-        if (!isDownloaded()) return false
-        return sha256(modelFile) == EXPECTED_SHA256
+    fun verifyInstalled(): Boolean = synchronized(verificationLock) {
+        val file = modelFile
+        if (!isDownloaded()) {
+            verifiedFingerprint = null
+            return@synchronized false
+        }
+        val fingerprint = fingerprint(file)
+        if (verifiedFingerprint == fingerprint) return@synchronized true
+        val verified = sha256(file).equals(EXPECTED_SHA256, ignoreCase = true)
+        verifiedFingerprint = fingerprint.takeIf { verified }
+        verified
     }
+
+    private fun fingerprint(file: File): String =
+        file.canonicalPath + ":" + file.length() + ":" + file.lastModified()
 
     fun downloadModel(onProgress: (Int) -> Unit = {}): File {
         require(modelDirectory.usableSpace >= MIN_FREE_SPACE_BYTES) {
@@ -72,6 +83,7 @@ class LocalModelManager(context: Context) {
 
             if (modelFile.exists()) check(modelFile.delete()) { "Could not replace the previous model file." }
             check(temporary.renameTo(modelFile)) { "Could not finalize the verified model file." }
+            synchronized(verificationLock) { verifiedFingerprint = fingerprint(modelFile) }
             onProgress(100)
             return modelFile
         } finally {
@@ -79,7 +91,10 @@ class LocalModelManager(context: Context) {
         }
     }
 
-    fun deleteModel(): Boolean = !modelFile.exists() || modelFile.delete()
+    fun deleteModel(): Boolean = synchronized(verificationLock) {
+        verifiedFingerprint = null
+        !modelFile.exists() || modelFile.delete()
+    }
 
     private fun sha256(file: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
@@ -100,5 +115,7 @@ class LocalModelManager(context: Context) {
         const val DOWNLOAD_URL = "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct-GGUF/resolve/8ed288026e23958ad9dfa92d53ed773a8eee7125/LFM2.5-1.2B-Instruct-QAD-Q4_0.gguf?download=true"
         const val EXPECTED_SIZE_BYTES = 695755488L
         private const val MIN_FREE_SPACE_BYTES = 900L * 1024L * 1024L
+        private val verificationLock = Any()
+        @Volatile private var verifiedFingerprint: String? = null
     }
 }

@@ -1,6 +1,8 @@
 package com.hamari.mehenat.jobhunter.data
 
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody
+import java.io.ByteArrayOutputStream
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -36,7 +38,7 @@ class McpStreamableHttpClient(
 ) {
     private val ids = AtomicInteger(1)
     private var sessionId: String? = null
-    private var protocolVersion = "2025-03-26"
+    private var protocolVersion = "2025-11-25"
     private var initialized = false
 
     init {
@@ -155,32 +157,127 @@ class McpStreamableHttpClient(
             .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
         sessionId?.let { builder.header("Mcp-Session-Id", it) }
         if (initialized) builder.header("MCP-Protocol-Version", protocolVersion)
-        bearerToken?.takeIf(String::isNotBlank)?.let { builder.header("Authorization", "Bearer $it") }
+        bearerToken?.takeIf(String::isNotBlank)?.let { builder.header("Authorization", "Bearer " + it) }
         http.newCall(builder.build()).execute().use { response ->
             check(response.code != 301 && response.code != 302 && response.code != 307 && response.code != 308) {
                 "MCP endpoint redirected. Use the final HTTPS endpoint directly."
             }
-            check(response.isSuccessful) { "MCP HTTP request failed: HTTP ${response.code}" }
+            check(response.isSuccessful) { "MCP HTTP request failed: HTTP " + response.code }
             response.header("Mcp-Session-Id")?.let { sessionId = it }
-            val raw = response.body?.string().orEmpty()
-            if (raw.isBlank() && allowEmpty) return JSONObject()
-            check(raw.length <= MAX_RESPONSE_CHARS) { "MCP response exceeded the 1 MB safety limit." }
-            val jsonText = if (response.header("Content-Type").orEmpty().contains("text/event-stream", true)) {
-                raw.lineSequence().filter { it.startsWith("data:") }
-                    .map { it.removePrefix("data:").trim() }
-                    .filter(String::isNotBlank)
-                    .lastOrNull() ?: error("MCP server returned an empty event stream.")
-            } else raw
-            val parsed = JSONObject(jsonText)
-            parsed.optJSONObject("error")?.let { error ->
-                throw IllegalStateException("MCP error ${error.optString("code")}: ${error.optString("message")}")
+
+            val bytes = response.body?.let(::readBoundedBody) ?: ByteArray(0)
+            if (allowEmpty) {
+                check(response.code == 202 && bytes.isEmpty()) {
+                    "MCP notifications must be acknowledged with HTTP 202 and an empty body."
+                }
+                return JSONObject()
+            }
+
+            val expectedId = body.opt("id")
+            val contentType = response.header("Content-Type").orEmpty()
+            val parsed = when {
+                contentType.contains("application/json", true) ->
+                    JSONObject(String(bytes, Charsets.UTF_8))
+                contentType.contains("text/event-stream", true) ->
+                    parseSseResponse(String(bytes, Charsets.UTF_8), expectedId)
+                else -> error("MCP server returned an unsupported Content-Type.")
+            }
+            check(parsed.optString("jsonrpc") == "2.0") { "MCP response is not a JSON-RPC 2.0 message." }
+            check(parsed.has("id") && sameJsonRpcId(parsed.opt("id"), expectedId)) {
+                "MCP response ID did not match the request."
+            }
+            parsed.optJSONObject("error")?.let { rpcError ->
+                throw IllegalStateException(
+                    "MCP error " + rpcError.optString("code") + ": " + rpcError.optString("message")
+                )
             }
             return parsed
         }
     }
 
+    private fun readBoundedBody(body: ResponseBody): ByteArray {
+        val declaredLength = body.contentLength()
+        check(declaredLength < 0L || declaredLength <= MAX_RESPONSE_BYTES.toLong()) {
+            "MCP response exceeded the 1 MB safety limit."
+        }
+
+        val output = ByteArrayOutputStream(
+            if (declaredLength in 1..MAX_RESPONSE_BYTES.toLong()) declaredLength.toInt() else 8192
+        )
+        body.byteStream().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) {
+                val remainingWithOverflowByte = MAX_RESPONSE_BYTES + 1 - output.size()
+                val count = input.read(buffer, 0, minOf(buffer.size, remainingWithOverflowByte))
+                if (count < 0) break
+                output.write(buffer, 0, count)
+                check(output.size() <= MAX_RESPONSE_BYTES) {
+                    "MCP response exceeded the 1 MB safety limit."
+                }
+            }
+        }
+        return output.toByteArray()
+    }
+
+    private fun parseSseResponse(raw: String, expectedId: Any?): JSONObject {
+        val dataLines = mutableListOf<String>()
+        val events = mutableListOf<String>()
+        fun dispatchEvent() {
+            if (dataLines.isNotEmpty()) {
+                events += dataLines.joinToString("\n")
+                dataLines.clear()
+            }
+        }
+
+        val normalized = raw.replace("\r\n", "\n").replace('\r', '\n')
+        normalized.split('\n').forEach { line ->
+            if (line.isEmpty()) {
+                dispatchEvent()
+            } else if (!line.startsWith(":")) {
+                val separator = line.indexOf(':')
+                val field = if (separator < 0) line else line.substring(0, separator)
+                if (field == "data") {
+                    var value = if (separator < 0) "" else line.substring(separator + 1)
+                    if (value.startsWith(" ")) value = value.substring(1)
+                    dataLines += value
+                }
+            }
+        }
+        dispatchEvent()
+
+        events.forEach { eventData ->
+            if (eventData.isBlank()) return@forEach
+            val message = JSONObject(eventData)
+            check(message.optString("jsonrpc") == "2.0") {
+                "MCP event stream contained a non-JSON-RPC message."
+            }
+            if (message.has("method") && message.has("id")) {
+                error("MCP server-initiated requests are not supported by this client.")
+            }
+            if (message.has("id") && (message.has("result") || message.has("error"))) {
+                check(sameJsonRpcId(message.opt("id"), expectedId)) {
+                    "MCP event stream response ID did not match the request."
+                }
+                return message
+            }
+        }
+        error("MCP event stream ended without a response matching the request ID.")
+    }
+
+    private fun sameJsonRpcId(actual: Any?, expected: Any?): Boolean {
+        if (actual == null || expected == null ||
+            actual === JSONObject.NULL || expected === JSONObject.NULL
+        ) return false
+        if (actual is Number && expected is Number) {
+            val actualNumber = actual.toString().toBigDecimalOrNull() ?: return false
+            val expectedNumber = expected.toString().toBigDecimalOrNull() ?: return false
+            return actualNumber.compareTo(expectedNumber) == 0
+        }
+        return actual == expected
+    }
+
     companion object {
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
-        private const val MAX_RESPONSE_CHARS = 1_048_576
+        private const val MAX_RESPONSE_BYTES = 1_048_576
     }
 }
