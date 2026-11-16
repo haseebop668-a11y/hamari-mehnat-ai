@@ -27,9 +27,15 @@ A private, single-owner Android application for international job discovery and 
 - **AEWV agreement review:** checks pasted or extracted contract text for missing core terms, weekly hours, pay, trial-period wording, employer/job-title mismatches and common exploitation red flags. This is a first-pass checklist, not legal advice.
 - **Scheduled discovery:** WorkManager runs every 12 hours only while network connectivity is available, rotates configured target roles and stores matching vacancies locally.
 
-## Connector Hub and guided CV
+## Connector Hub and CV & Application Studio
 
-See [docs/CONNECTOR_HUB_AND_GUIDED_CV.md](docs/CONNECTOR_HUB_AND_GUIDED_CV.md) for the Android connector hub, per-provider enablement, secure Adzuna connection, guided candidate intake, and automatic local-model download for criteria-based CV drafting. Public feeds require no login; Adzuna currently uses developer-issued app ID/key credentials; Greenhouse and Lever use public company board identifiers. LinkedIn, Indeed and SEEK remain browser hand-offs, not connected APIs. No universal OAuth or generic MCP transport is claimed.
+The Android Local AI tab now includes a warm editorial CV and application studio with guided candidate intake, vacancy-specific follow-up questions, tailored CV and cover-letter generation, encrypted local draft history, and PDF export. The first AI action automatically downloads and verifies the pinned local model.
+
+The Connector Hub supports individually enabled public job feeds, encrypted Adzuna app credentials, persistent Greenhouse/Lever board settings, and a guarded MCP Streamable HTTP client. MCP connections use HTTPS, discover server tools, and expose only tools marked read-only by the server; every call requires user confirmation. Remote code is never downloaded or executed.
+
+**Authorization limitations:** public feeds and Greenhouse/Lever company boards do not require personal login. Adzuna uses its app ID/key credentials. Provider-specific OAuth login is not enabled, and MCP servers requiring OAuth rather than bearer-token authorization are not supported in this release. LinkedIn, Indeed, SEEK and EURES remain official browser hand-offs, not connected APIs. This is not a generic executable plugin marketplace.
+
+See [docs/CONNECTOR_HUB_AND_GUIDED_CV.md](docs/CONNECTOR_HUB_AND_GUIDED_CV.md) for the security boundary and verification details.
 
 ## Multi-country support
 
