@@ -70,5 +70,11 @@ A beautiful screen is not complete if it contains inert controls, missing persis
 ## Explicitly out of scope until separately approved
 - Payment gateway, subscriptions, paid placement, payroll, bank integrations, cards, wallets and money movement.
 - Provider-specific OAuth unless the provider documents a supported flow and valid client registration exists.
-- Full MCP feature compatibility including standalone GET streams, reconnect/resumption, server-initiated requests and OAuth.
+- MCP capabilities not implemented in this app: standalone GET streams, reconnect/resumption, server-initiated requests, elicitation/input-required round trips, resources, prompts, subscriptions and OAuth.
 - Automatic job applications, employer messages or autonomous external actions.
+
+## MCP current protocol integration notes
+- Prefer the current stateless `2026-07-28` protocol discovery and per-request metadata headers; use legacy initialize/session fallback only when the remote server requires an advertised supported legacy version.
+- Validate tool-provided custom parameter-header schema metadata before mapping it to HTTP headers. Reject unsupported placements/types rather than guessing.
+- Read-only annotations are untrusted server claims. Explicitly display host, tool name, description and exact arguments and require user approval. No automatic CV/profile/document transmission.
+- Current implementation is intentionally limited: no standalone GET event stream, reconnect/resumption, server initiated requests, input-required/elicitation, resources, prompts, subscriptions or OAuth.

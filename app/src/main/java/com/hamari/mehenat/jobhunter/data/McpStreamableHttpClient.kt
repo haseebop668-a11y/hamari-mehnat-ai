@@ -88,12 +88,12 @@ class McpStreamableHttpClient(
         protocolMode = McpProtocolMode.MODERN
         protocolVersion = CURRENT_PROTOCOL_VERSION
 
-        val discovery = try {
+        val discovery: JSONObject = try {
             request("server/discover", JSONObject())
         } catch (error: McpHttpException) {
-            handleModernProbeFailure(error)
+            return handleModernProbeFailure(error)
         } catch (error: McpRpcException) {
-            when (error.rpcErrorCode) {
+            return when (error.rpcErrorCode) {
                 -32022 -> connectLegacyIfAdvertised(error.rpcErrorData?.optJSONArray("supported"))
                 -32601, -32602 -> connectLegacy()
                 else -> throw error

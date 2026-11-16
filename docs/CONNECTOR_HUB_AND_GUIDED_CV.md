@@ -28,18 +28,19 @@ There is no universal OAuth login that can be applied to every job provider. Eac
 
 - Android CI must pass for the new branch head, including debug/release assembly, unit tests and live smoke checks.
 - Physical-device testing is still required for OAuth-free connector toggles, Adzuna credential save/disconnect, company ATS board configuration, model download/inference, CV question progression, PDF export, memory pressure, thermal behaviour and battery use.
-- The connector hub includes a limited remote MCP Streamable HTTP client for protocol version 2025-11-25. It supports HTTPS POST initialization, session handling where supplied, JSON responses and bounded SSE POST responses with JSON-RPC ID matching. It does not support standalone GET streams, reconnection/resumption, server-initiated requests or OAuth; do not describe it as full MCP compatibility.
+- The connector hub supports current MCP 2026-07-28 stateless Streamable HTTP discovery and per-request metadata/headers. A constrained fallback supports legacy 2025-11-25/2025-06-18/2025-03-26 initialize/session servers. Requests and results are size-bounded; response IDs and tool-list cursors are checked. Current tool schemas with supported x-mcp-header primitive parameters are validated before they are mapped to request headers.
+- Unsupported MCP features remain explicit: standalone GET event streams, reconnection/resumption, server-initiated requests, input-required/elicitation round trips, resources, prompts, subscriptions and OAuth.
 
 ## Final Studio and MCP connector update
 
 - The Local AI tab now contains a warm editorial CV and application studio using the existing Fieldbook palette: warm ivory paper, soft sage/forest green, restrained terracotta, rounded paper panels and serif editorial headings.
 - The studio collects candidate basics progressively, asks the local model for up to five vacancy-specific follow-up questions, and stores answers in the existing Android Keystore-encrypted profile.
 - It can draft either a tailored CV or a cover letter, stores up to eight local document versions, and exports the selected draft as PDF. Every draft remains user-reviewed; no application or message is sent.
-- Added an MCP Streamable HTTP client for HTTPS endpoints with session initialization, negotiated protocol version, optional bearer authorization, tool discovery and JSON/SSE response handling.
+- Added an MCP Streamable HTTP client with current 2026-07-28 stateless discovery, per-request metadata and method headers; a limited legacy initialize/session fallback is retained for older supported revisions. Optional bearer authorization is held in screen memory only.
 - MCP tool discovery filters on `annotations.readOnlyHint=true` and not `destructiveHint=true`, but these are untrusted server-provided hints, not a safety guarantee. The screen warns the user to trust the server and inspect the tool/arguments before approving each call. The app does not automatically transmit profile or document data. Remote code is never downloaded or executed.
-- MCP bearer tokens are held only in the current screen's memory and cleared on disconnect. The client sends an MCP session DELETE when disconnecting where the server supports it. The connector does not collect account passwords.
+- MCP bearer tokens are held only in the current screen's memory and cleared on disconnect. Legacy sessions receive a DELETE on disconnect where supported; the current stateless protocol has no session to delete. The connector does not collect account passwords.
 - Provider-specific OAuth login is not enabled: the current job data sources do not share one OAuth system. Adzuna uses developer-issued app ID/key credentials; public feeds and company ATS boards do not require user login. MCP servers that require OAuth rather than a bearer token are not supported by this release and must not be labelled as connected.
-- Unit tests cover MCP HTTPS/session handling and read-only tool restrictions; the complete Android CI run is the release gate.
+- Unit tests cover modern discovery/metadata, legacy fallback, bounded responses, response-ID matching, SSE framing, pagination, custom parameter headers, HTTPS validation and read-only filtering. The exact-head Android CI run remains the release gate.
 
 ## Document OCR
 

@@ -94,7 +94,7 @@ fun McpConnectorCard() {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Text("MCP CONNECTOR", color = FieldbookPalette.Rust, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp)
             Text("Connect a trusted tool server", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, fontFamily = androidx.compose.ui.text.font.FontFamily.Serif)
-            Text("Limited MCP Streamable HTTP support. Use an HTTPS endpoint and optional bearer token. Server read-only annotations are untrusted hints; review every tool and argument before running it. OAuth is not enabled, and account passwords must never be pasted here.", color = FieldbookPalette.Muted, fontSize = 11.sp)
+            Text("Limited MCP Streamable HTTP support: current stateless protocol (2026-07-28) with a guarded legacy handshake for older servers. Use an HTTPS endpoint and optional bearer token. Server read-only annotations are untrusted hints; review every tool and argument before running it. OAuth is not enabled, and account passwords must never be pasted here.", color = FieldbookPalette.Muted, fontSize = 11.sp)
             if (client == null) {
                 OutlinedTextField(endpoint, { endpoint = it }, label = { Text("MCP HTTPS endpoint") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 OutlinedTextField(token, { token = it }, label = { Text("Bearer token (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
@@ -102,7 +102,7 @@ fun McpConnectorCard() {
                     enabled = endpoint.startsWith("https://") && !busy,
                     onClick = {
                         busy = true
-                        status = "Negotiating an MCP session and discovering tools advertised as read-only…"
+                        status = "Discovering the MCP protocol and tools advertised as read-only…"
                         scope.launch {
                             try {
                                 val connection = withContext(Dispatchers.IO) {
@@ -140,9 +140,9 @@ fun McpConnectorCard() {
                         scope.launch {
                             try {
                                 withContext(Dispatchers.IO) { active?.disconnect() }
-                                status = "MCP session closed. The bearer token was held only in memory."
+                                status = "MCP connection closed. The bearer token was held only in memory."
                             } catch (e: Exception) {
-                                status = "Local disconnect completed; server session close reported: ${e.message ?: e.javaClass.simpleName}"
+                                status = "Local disconnect completed; server disconnect reported: ${e.message ?: e.javaClass.simpleName}"
                             } finally {
                                 client = null
                                 tools = emptyList()
