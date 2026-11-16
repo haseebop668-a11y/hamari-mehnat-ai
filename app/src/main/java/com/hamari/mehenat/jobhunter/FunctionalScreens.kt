@@ -71,8 +71,9 @@ private val ScreenPanel = FieldbookPalette.Paper
 fun JobsScreen(context: Context) {
     var query by remember { mutableStateOf("mechanic") }
     var countries by remember { mutableStateOf("New Zealand, Australia, United Kingdom") }
-    var greenhouseBoards by remember { mutableStateOf("") }
-    var leverSites by remember { mutableStateOf("") }
+    val connectorPreferences = remember(context) { com.hamari.mehenat.jobhunter.data.ConnectorPreferences(context) }
+    var greenhouseBoards by remember(context) { mutableStateOf(connectorPreferences.greenhouseBoards()) }
+    var leverSites by remember(context) { mutableStateOf(connectorPreferences.leverSites()) }
     var results by remember { mutableStateOf<List<JobListing>>(emptyList()) }
     var status by remember { mutableStateOf("Search permitted public job feeds. Results include the original source link.") }
     var visaCountry by remember { mutableStateOf("Australia") }
@@ -94,9 +95,9 @@ fun JobsScreen(context: Context) {
         ConnectorHub(
             context = context,
             greenhouseBoards = greenhouseBoards,
-            onGreenhouseBoardsChange = { greenhouseBoards = it },
+            onGreenhouseBoardsChange = { greenhouseBoards = it; connectorPreferences.saveGreenhouseBoards(it) },
             leverSites = leverSites,
-            onLeverSitesChange = { leverSites = it }
+            onLeverSitesChange = { leverSites = it; connectorPreferences.saveLeverSites(it) }
         )
         Button(
             onClick = {
