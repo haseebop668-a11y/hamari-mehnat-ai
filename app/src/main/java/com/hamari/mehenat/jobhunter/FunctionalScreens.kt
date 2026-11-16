@@ -761,9 +761,9 @@ fun LocalAiScreen(context: Context) {
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("ON-DEVICE STUDIO", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-        Text("Your private assistant", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
-        Text("Local model runtime is the required V1 path. No cloud AI provider will receive your CV.", color = ScreenMuted, fontSize = 12.sp)
+        Text("YOUR CAREER WORKSHOP", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text("AI CV & application studio", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
+        Text("A calm, private space to prepare thoughtful job documents. Your CV and application details stay on this phone while the local model works.", color = ScreenMuted, fontSize = 12.sp)
         CvApplicationStudio(context)
 Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
