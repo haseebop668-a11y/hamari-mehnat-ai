@@ -73,10 +73,6 @@ fun JobsScreen(context: Context) {
     var countries by remember { mutableStateOf("New Zealand, Australia, United Kingdom") }
     var greenhouseBoards by remember { mutableStateOf("") }
     var leverSites by remember { mutableStateOf("") }
-    var adzunaAppId by remember { mutableStateOf("") }
-    var adzunaAppKey by remember { mutableStateOf("") }
-    var adzunaConfigured by remember { mutableStateOf(AdzunaCredentialsStore(context).load() != null) }
-    var adzunaStatus by remember { mutableStateOf(if (adzunaConfigured) "Adzuna credentials are encrypted on this device." else "Optional: connect Adzuna for country-specific listings.") }
     var results by remember { mutableStateOf<List<JobListing>>(emptyList()) }
     var status by remember { mutableStateOf("Search permitted public job feeds. Results include the original source link.") }
     var visaCountry by remember { mutableStateOf("Australia") }
@@ -95,61 +91,13 @@ fun JobsScreen(context: Context) {
         OutlinedTextField(value = countries, onValueChange = { countries = it }, label = { Text("Target countries (comma separated)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = greenhouseBoards, onValueChange = { greenhouseBoards = it }, label = { Text("Optional Greenhouse company board IDs") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = leverSites, onValueChange = { leverSites = it }, label = { Text("Optional Lever company site names") }, modifier = Modifier.fillMaxWidth())
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = ScreenPanel),
-            border = BorderStroke(1.dp, FieldbookPalette.Rule)
-        ) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("COUNTRY-SPECIFIC API · ADZUNA", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-                Text(
-                    if (adzunaConfigured) "Connected credentials are stored encrypted with Android Keystore."
-                    else "Optional API connection for Australia, New Zealand, UK, Germany and Canada.",
-                    color = ScreenMuted, fontSize = 11.sp
-                )
-                OutlinedTextField(
-                    value = adzunaAppId,
-                    onValueChange = { adzunaAppId = it },
-                    label = { Text("Adzuna app ID") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
-                )
-                OutlinedTextField(
-                    value = adzunaAppKey,
-                    onValueChange = { adzunaAppKey = it },
-                    label = { Text("Adzuna app key") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation()
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        try {
-                            AdzunaCredentialsStore(context).save(adzunaAppId, adzunaAppKey)
-                            adzunaAppId = ""
-                            adzunaAppKey = ""
-                            adzunaConfigured = true
-                            adzunaStatus = "Adzuna credentials encrypted and saved on this device."
-                        } catch (e: Exception) {
-                            adzunaStatus = "Could not save credentials: ${e.message ?: e.javaClass.simpleName}"
-                        }
-                    }, enabled = adzunaAppId.isNotBlank() && adzunaAppKey.isNotBlank()) {
-                        Text("Save keys")
-                    }
-                    if (adzunaConfigured) {
-                        TextButton(onClick = {
-                            AdzunaCredentialsStore(context).clear()
-                            adzunaConfigured = false
-                            adzunaStatus = "Adzuna credentials removed from this device."
-                        }) { Text("Remove") }
-                    }
-                }
-                Text(adzunaStatus, color = ScreenMuted, fontSize = 10.sp)
-                TextButton(onClick = {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://developer.adzuna.com/")))
-                }) { Text("Get personal API credentials") }
-            }
-        }
+        ConnectorHub(
+            context = context,
+            greenhouseBoards = greenhouseBoards,
+            onGreenhouseBoardsChange = { greenhouseBoards = it },
+            leverSites = leverSites,
+            onLeverSitesChange = { leverSites = it }
+        )
         Button(
             onClick = {
                 if (query.isBlank() || countries.isBlank()) {
@@ -165,7 +113,8 @@ fun JobsScreen(context: Context) {
                                 countries = countryList,
                                 greenhouseBoards = greenhouseBoards.split(",").map { it.trim() }.filter { it.isNotBlank() },
                                 leverSites = leverSites.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                                adzunaCredentials = AdzunaCredentialsStore(context).load()
+                                adzunaCredentials = AdzunaCredentialsStore(context).load(),
+                                enabledProviderIds = com.hamari.mehenat.jobhunter.data.ConnectorPreferences(context).enabledIds()
                             )
                         }
                         results = JobFreshnessService.removeExpired(sourceResults.flatMap { it.jobs })
