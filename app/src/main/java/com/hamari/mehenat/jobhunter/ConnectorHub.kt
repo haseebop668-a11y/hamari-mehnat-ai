@@ -123,6 +123,7 @@ fun ConnectorHub(
                 else setEnabled("lever", enabled)
             })
             Text("LinkedIn, Indeed, SEEK and EURES remain browser hand-offs, not account-connected API integrations. Use their official sites directly; this app does not scrape private accounts.", color = FieldbookPalette.Muted, fontSize = 10.sp)
+            McpConnectorCard()
             Text(message, color = FieldbookPalette.Muted, fontSize = 11.sp)
         }
     }
