@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -77,6 +78,7 @@ fun CvApplicationStudio(context: Context) {
     var followUps by remember { mutableStateOf<List<String>>(emptyList()) }
     var followUpIndex by remember { mutableIntStateOf(0) }
     var draft by remember { mutableStateOf("") }
+    var documentKind by remember { mutableStateOf("CV") }
     var draftTitle by remember { mutableStateOf("Tailored CV") }
     var savedDrafts by remember { mutableStateOf(loadCvDrafts(profile)) }
     val missing = CvCoreQuestions.firstOrNull { profile.optString(it.key).isBlank() }
@@ -280,7 +282,11 @@ fun CvApplicationStudio(context: Context) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("03  ·  YOUR TAILORED DOCUMENT", color = FieldbookPalette.Rust, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.1.sp)
                     Text("Thoughtful, honest, job-ready.", fontFamily = FontFamily.Serif, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = FieldbookPalette.Ink)
-                    Text("The model is downloaded automatically the first time you ask for AI help (about 696 MB). It is checksum-verified and runs locally.", color = FieldbookPalette.Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                    Text("Choose the document you need. The model is downloaded automatically the first time and runs privately on this phone.", color = FieldbookPalette.Muted, fontSize = 11.sp, lineHeight = 16.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = documentKind == "CV", onClick = { documentKind = "CV" }, label = { Text("Tailored CV") })
+                        FilterChip(selected = documentKind == "Cover Letter", onClick = { documentKind = "Cover Letter" }, label = { Text("Cover letter") })
+                    }
                     Button(
                         onClick = {
                             runLocalTask("Preparing your private model and writing a CV for this role…") {
@@ -294,19 +300,19 @@ fun CvApplicationStudio(context: Context) {
                                     })
                                 }.toString().take(5000)
                                 val output = withContext(Dispatchers.IO) {
-                                    LocalAgentOrchestrator().execute(
-                                        PersonalAgent.CV_TAILOR,
-                                        "Create a polished, ATS-readable CV in plain text with clear headings and bullet points for the target role. Prioritize the vacancy criteria, map each requirement to truthful candidate evidence, and include a short skills section. Never invent employers, dates, qualifications, licences, work rights, achievements or experience. Mark material gaps as [CANDIDATE TO CONFIRM]. Do not include private notes. Target role: ${targetRole.ifBlank { "As described in the vacancy" }}. Vacancy criteria:\n$criteria",
-                                        allFacts,
-                                        criteria.take(5000),
-                                        512
-                                    )
+                                    val agent = if (documentKind == "CV") PersonalAgent.CV_TAILOR else PersonalAgent.COVER_LETTER
+                                    val instruction = if (documentKind == "CV") {
+                                        "Create a polished, ATS-readable CV with clear headings and bullet points. Prioritize vacancy criteria and map each requirement to truthful candidate evidence. Never invent employers, dates, qualifications, licences, work rights, achievements or experience. Mark material gaps as [CANDIDATE TO CONFIRM]. Target role: ${targetRole.ifBlank { "As described in the vacancy" }}. Vacancy criteria:\n$criteria"
+                                    } else {
+                                        "Write a warm, professional, concise cover letter tailored to this vacancy. Use only candidate facts, explain transferable skills honestly, never invent experience, qualifications, licences or work rights, and mark missing details as [CANDIDATE TO CONFIRM]. Target role: ${targetRole.ifBlank { "As described in the vacancy" }}. Vacancy criteria:\n$criteria"
+                                    }
+                                    LocalAgentOrchestrator().execute(agent, instruction, allFacts, criteria.take(5000), 512)
                                 }
                                 draft = output
-                                draftTitle = if (targetRole.isBlank()) "Tailored CV" else "CV - $targetRole"
+                                draftTitle = if (targetRole.isBlank()) documentKind else "$documentKind - $targetRole"
                                 val updated = JSONObject(profile.toString())
                                 val history = updated.optJSONArray("cv_drafts") ?: JSONArray()
-                                history.put(JSONObject().put("role", targetRole).put("criteria", criteria).put("created_at", System.currentTimeMillis()).put("content", output))
+                                history.put(JSONObject().put("role", targetRole).put("kind", documentKind).put("criteria", criteria).put("created_at", System.currentTimeMillis()).put("content", output))
                                 while (history.length() > 8) history.remove(0)
                                 updated.put("cv_drafts", history)
                                 saveProfile(updated)
@@ -316,7 +322,7 @@ fun CvApplicationStudio(context: Context) {
                         },
                         enabled = missing == null && currentFollowUp == null && criteria.isNotBlank() && !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (busy) "Creating your document…" else "Create my tailored CV") }
+                    ) { Text(if (busy) "Creating your document…" else "Create my tailored $documentKind") }
                     if (busy && progress > 0) LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth(), color = FieldbookPalette.Forest, trackColor = FieldbookPalette.PaperShade)
                     if (draft.isNotBlank()) {
                         Text(draft, color = FieldbookPalette.Ink, fontSize = 12.sp, lineHeight = 18.sp)
@@ -337,7 +343,7 @@ fun CvApplicationStudio(context: Context) {
                                 }
                                 TextButton(onClick = {
                                     draft = item.optString("content")
-                                    draftTitle = "CV - ${item.optString("role").ifBlank { "Tailored" }}"
+                                    draftTitle = "${item.optString("kind").ifBlank { "CV" }} - ${item.optString("role").ifBlank { "Tailored" }}"
                                     status = "Loaded a saved draft. Review before exporting."
                                 }) { Text("Open") }
                             }
