@@ -27,7 +27,7 @@ data class TextExtractionResult(
     val warning: String? = null
 )
 
-class DocumentTextExtractor(context: Context) {
+class DocumentTextExtractor(private val context: Context) {
     init { PDFBoxResourceLoader.init(context.applicationContext) }
 
     fun extract(fileName: String, bytes: ByteArray): TextExtractionResult {
