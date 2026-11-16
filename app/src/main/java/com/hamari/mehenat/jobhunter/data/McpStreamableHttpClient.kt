@@ -586,7 +586,9 @@ class McpStreamableHttpClient(
 
         events.forEach { eventData ->
             if (eventData.isBlank()) return@forEach
-            val message = JSONObject(eventData)
+            // SSE joins multiple data lines with literal newlines. Remove JSON
+            // whitespace only outside quoted strings before parsing the event.
+            val message = JSONObject(compactJsonWhitespace(eventData))
             check(message.optString("jsonrpc") == "2.0") {
                 "MCP event stream contained a non-JSON-RPC message."
             }
@@ -601,6 +603,32 @@ class McpStreamableHttpClient(
             }
         }
         error("MCP event stream ended without a response matching the request ID.")
+    }
+
+    private fun compactJsonWhitespace(input: String): String {
+        val output = StringBuilder(input.length)
+        var inString = false
+        var escaped = false
+        input.forEach { character ->
+            if (inString) {
+                output.append(character)
+                when {
+                    escaped -> escaped = false
+                    character == '\\' -> escaped = true
+                    character == '"' -> inString = false
+                }
+            } else {
+                when {
+                    character == '"' -> {
+                        inString = true
+                        output.append(character)
+                    }
+                    character.isWhitespace() -> Unit
+                    else -> output.append(character)
+                }
+            }
+        }
+        return output.toString()
     }
 
     private fun sameJsonRpcId(actual: Any?, expected: Any?): Boolean {
