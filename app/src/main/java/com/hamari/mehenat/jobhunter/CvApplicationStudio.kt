@@ -261,10 +261,7 @@ fun CvApplicationStudio(context: Context) {
                                                 300
                                             )
                                         }
-                                        val questions = runCatching {
-                                            val array = JSONArray(output.substring(output.indexOf('['), output.lastIndexOf(']') + 1))
-                                            (0 until array.length()).map { array.optString(it).trim() }.filter { it.length in 8..240 }.take(5)
-                                        }.getOrDefault(emptyList())
+                                        val questions = CvQuestionParser.parse(output)
                                         followUps = questions
                                         followUpIndex = 0
                                         status = if (questions.isEmpty()) "No extra questions were returned. You can create your tailored draft now." else "The AI found ${questions.size} extra details that may strengthen this application."
