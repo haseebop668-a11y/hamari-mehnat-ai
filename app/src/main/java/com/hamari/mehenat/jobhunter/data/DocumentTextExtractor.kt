@@ -82,7 +82,7 @@ class DocumentTextExtractor(private val context: Context) {
                                 val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
                                 try {
                                     page.render(bitmap, Rect(0, 0, width, height), null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                                    append(recognize(bitmap)).append('\\n')
+                                    append(recognize(bitmap)).append('\n')
                                 } finally { bitmap.recycle() }
                             }
                         }
