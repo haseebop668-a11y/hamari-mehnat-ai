@@ -40,3 +40,10 @@ There is no universal OAuth login that can be applied to every job provider. Eac
 - MCP bearer tokens are held only in the current screen's memory and cleared on disconnect. The client sends an MCP session DELETE when disconnecting where the server supports it. The connector does not collect account passwords.
 - Provider-specific OAuth login is not enabled: the current job data sources do not share one OAuth system. Adzuna uses developer-issued app ID/key credentials; public feeds and company ATS boards do not require user login. MCP servers that require OAuth rather than a bearer token are not supported by this release and must not be labelled as connected.
 - Unit tests cover MCP HTTPS/session handling and read-only tool restrictions; the complete Android CI run is the release gate.
+
+## Document OCR
+
+- PDF extraction first uses selectable text. If no selectable text exists, the app renders up to 10 pages locally and runs the bundled ML Kit Latin text-recognition model on-device.
+- PNG, JPEG and WebP image files can also be OCR-processed locally after bounded downsampling.
+- Imported source files and extracted text remain in the existing encrypted local vault/profile. OCR output carries a visible review warning because names, dates, IDs and numbers can be misread.
+- OCR is Latin-script only in this release; Urdu and other non-Latin scripts are not claimed as supported. OCR is bounded by the 25 MB source limit, 10-page scanned-PDF limit, 2,200-pixel render dimension and per-page timeout.
