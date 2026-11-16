@@ -29,3 +29,14 @@ There is no universal OAuth login that can be applied to every job provider. Eac
 - Android CI must pass for the new branch head, including debug/release assembly, unit tests and live smoke checks.
 - Physical-device testing is still required for OAuth-free connector toggles, Adzuna credential save/disconnect, company ATS board configuration, model download/inference, CV question progression, PDF export, memory pressure, thermal behaviour and battery use.
 - The current UI is a plugin-style connector hub for the integrations actually supported by this release; it is not a generic remote MCP client. Generic MCP transport, dynamic third-party tool discovery and OAuth login for providers that do not document OAuth are not implemented.
+
+## Final Studio and MCP connector update
+
+- The Local AI tab now contains a warm editorial CV and application studio using the existing Fieldbook palette: warm ivory paper, soft sage/forest green, restrained terracotta, rounded paper panels and serif editorial headings.
+- The studio collects candidate basics progressively, asks the local model for up to five vacancy-specific follow-up questions, and stores answers in the existing Android Keystore-encrypted profile.
+- It can draft either a tailored CV or a cover letter, stores up to eight local document versions, and exports the selected draft as PDF. Every draft remains user-reviewed; no application or message is sent.
+- Added an MCP Streamable HTTP client for HTTPS endpoints with session initialization, negotiated protocol version, optional bearer authorization, tool discovery and JSON/SSE response handling.
+- MCP tool execution is limited to tools advertised with `annotations.readOnlyHint=true` and not `destructiveHint=true`. Each call requires a separate in-app user confirmation. Remote code is never downloaded or executed.
+- MCP bearer tokens are held only in the current screen's memory and cleared on disconnect. The connector does not collect account passwords.
+- Provider-specific OAuth login is not enabled: the current job data sources do not share one OAuth system. Adzuna uses developer-issued app ID/key credentials; public feeds and company ATS boards do not require user login. MCP servers that require OAuth rather than a bearer token are not supported by this release and must not be labelled as connected.
+- Unit tests cover MCP HTTPS/session handling and read-only tool restrictions; the complete Android CI run is the release gate.
