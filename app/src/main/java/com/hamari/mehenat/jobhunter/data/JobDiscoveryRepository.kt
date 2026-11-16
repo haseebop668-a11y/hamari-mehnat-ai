@@ -91,13 +91,15 @@ class JobDiscoveryRepository(context: Context) {
         countries: List<String>,
         greenhouseBoards: List<String> = emptyList(),
         leverSites: List<String> = emptyList(),
-        adzunaCredentials: AdzunaCredentials? = null
+        adzunaCredentials: AdzunaCredentials? = null,
+        enabledProviderIds: Set<String>? = null
     ): List<SourceResult> {
         val registry = providerRegistry(greenhouseBoards, leverSites, adzunaCredentials)
+        val configuredIds = ConnectorPreferencesEnabledIds.resolve(enabledProviderIds, registry.all().map { it.id }.toSet())
         return registry.searchEnabled(
             query = query,
             countries = countries,
-            enabledIds = registry.all().map { it.id }.toSet()
+            enabledIds = configuredIds
         ) { descriptor, requestCost ->
             limiter.tryAcquire(
                 source = descriptor.id,
@@ -107,4 +109,9 @@ class JobDiscoveryRepository(context: Context) {
             )
         }
     }
+}
+
+private object ConnectorPreferencesEnabledIds {
+    fun resolve(requested: Set<String>?, available: Set<String>): Set<String> =
+        (requested ?: available).intersect(available)
 }
