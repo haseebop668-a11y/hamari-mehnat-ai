@@ -29,7 +29,7 @@ A private, single-owner Android application for international job discovery and 
 
 ## Connector Hub and CV & Application Studio
 
-The Android Local AI tab now includes a warm editorial CV and application studio with guided candidate intake, vacancy-specific follow-up questions, tailored CV and cover-letter generation, encrypted local draft history, and PDF export. The first AI action automatically downloads and verifies the pinned local model.
+Document imports also support on-device Latin-script OCR for scanned PDFs (up to 10 pages) and PNG/JPEG images. OCR output is clearly marked for human review; Urdu/non-Latin OCR is not supported in this release.\n\nThe Android Local AI tab now includes a warm editorial CV and application studio with guided candidate intake, vacancy-specific follow-up questions, tailored CV and cover-letter generation, encrypted local draft history, and PDF export. The first AI action automatically downloads and verifies the pinned local model.
 
 The Connector Hub supports individually enabled public job feeds, encrypted Adzuna app credentials, persistent Greenhouse/Lever board settings, and a guarded MCP Streamable HTTP client. MCP connections use HTTPS, discover server tools, and expose only tools marked read-only by the server; every call requires user confirmation. Remote code is never downloaded or executed.
 
