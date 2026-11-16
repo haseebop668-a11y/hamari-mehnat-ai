@@ -68,6 +68,26 @@ class McpStreamableHttpClient(
     }
 
     @Synchronized
+    fun disconnect() {
+        val activeSession = sessionId
+        if (activeSession != null) {
+            val builder = Request.Builder()
+                .url(endpoint)
+                .header("Mcp-Session-Id", activeSession)
+                .header("MCP-Protocol-Version", protocolVersion)
+                .delete()
+            bearerToken?.takeIf(String::isNotBlank)?.let { builder.header("Authorization", "Bearer $it") }
+            http.newCall(builder.build()).execute().use { response ->
+                check(response.code in setOf(200, 202, 204, 404, 405)) {
+                    "MCP session close failed: HTTP ${response.code}"
+                }
+            }
+        }
+        sessionId = null
+        initialized = false
+    }
+
+    @Synchronized
     fun listReadOnlyTools(): List<McpToolDescriptor> {
         check(initialized) { "Connect to the MCP server first." }
         val result = request("tools/list", JSONObject()).getJSONObject("result")
