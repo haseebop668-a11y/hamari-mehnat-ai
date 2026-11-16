@@ -121,12 +121,23 @@ fun McpConnectorCard() {
                         Text("${tools.size} read-only tools discovered", color = FieldbookPalette.Muted, fontSize = 10.sp)
                     }
                     OutlinedButton(onClick = {
-                        client = null
-                        tools = emptyList()
-                        selectedTool = null
-                        result = ""
-                        status = "Disconnected. The bearer token was held only in memory."
-                    }) { Text("Disconnect") }
+                        val active = client
+                        busy = true
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) { active?.disconnect() }
+                                status = "MCP session closed. The bearer token was held only in memory."
+                            } catch (e: Exception) {
+                                status = "Local disconnect completed; server session close reported: ${e.message ?: e.javaClass.simpleName}"
+                            } finally {
+                                client = null
+                                tools = emptyList()
+                                selectedTool = null
+                                result = ""
+                                busy = false
+                            }
+                        }
+                    }, enabled = !busy) { Text("Disconnect") }
                 }
                 tools.forEach { tool ->
                     OutlinedButton(
