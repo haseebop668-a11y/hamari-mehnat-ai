@@ -151,8 +151,12 @@ class InterviewReminderWorker(context: Context, params: WorkerParameters) : Work
         return try {
             val interviewId = inputData.getString("interview_id")
                 ?: return Result.failure()
-            val interview = InterviewStore(applicationContext).all()
-                .firstOrNull { it.id == interviewId } ?: return Result.success()
+            val store = InterviewStore(applicationContext)
+            val interview = try {
+                store.all().firstOrNull { it.id == interviewId }
+            } finally {
+                store.close()
+            } ?: return Result.success()
             val channelId = "interview_reminders"
             val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

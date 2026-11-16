@@ -67,6 +67,16 @@ private val ScreenGold = FieldbookPalette.Rust
 private val ScreenMuted = FieldbookPalette.Muted
 private val ScreenPanel = FieldbookPalette.Paper
 
+private inline fun <T> withTrackerStore(context: Context, action: (ApplicationTrackerStore) -> T): T {
+    val store = ApplicationTrackerStore(context)
+    return try { action(store) } finally { store.close() }
+}
+
+private inline fun <T> withInterviewStore(context: Context, action: (InterviewStore) -> T): T {
+    val store = InterviewStore(context)
+    return try { action(store) } finally { store.close() }
+}
+
 @Composable
 fun JobsScreen(context: Context) {
     var query by remember { mutableStateOf("mechanic") }
@@ -222,7 +232,7 @@ fun JobsScreen(context: Context) {
                             }) { Text("Himalayas source") }
                         }
                         Button(onClick = {
-                            val saved = ApplicationTrackerStore(context).save(job)
+                            val saved = withTrackerStore(context) { it.save(job) }
                             status = if (saved) "Vacancy saved to your local tracker." else "This vacancy is already saved."
                         }) { Text("Save job") }
                         OutlinedButton(onClick = {
@@ -524,7 +534,7 @@ fun FilesScreen(context: Context) {
         AlertDialog(
             onDismissRequest = { pendingDeleteDocumentId = null },
             title = { Text("Delete this document?") },
-            text = { Text("The encrypted source file will be removed. Any extracted CV/document text linked to this file will also be cleared from the encrypted profile.") },
+            text = { Text("The encrypted source file will be removed from app storage. Extracted CV/document text linked to this file will also be cleared from the encrypted profile when that profile can be decrypted.") },
             confirmButton = {
                 TextButton(onClick = {
                     val id = pendingDeleteDocumentId ?: return@TextButton
@@ -538,24 +548,10 @@ fun FilesScreen(context: Context) {
                                     false to true
                                 } else {
                                     var profileCleanupSucceeded = true
-                                    runCatching {
-                                        val store = LocalProfileStore(context)
-                                        val profile = store.load()
-                                        if (profile != null) {
-                                            var changed = false
-                                            if (profile.optString("cv_document_id") == id) {
-                                                profile.remove("cv_document_id")
-                                                profile.remove("cv_text")
-                                                changed = true
-                                            }
-                                            if (profile.optString("last_document_id") == id) {
-                                                profile.remove("last_document_id")
-                                                profile.remove("last_document_text")
-                                                changed = true
-                                            }
-                                            if (changed) store.save(profile.toString())
-                                        }
-                                    }.onFailure { profileCleanupSucceeded = false }
+                                    if (!LocalProfileStore(context).clearExtractedDocumentText(id)) {
+                                        profileCleanupSucceeded = false
+                                    }
+
                                     true to profileCleanupSucceeded
                                 }
                             }
@@ -576,7 +572,7 @@ fun FilesScreen(context: Context) {
                             message = "Delete failed: ${error.message ?: error.javaClass.simpleName}"
                         }
                     }
-                }) { Text("Delete permanently") }
+                }) { Text("Delete document") }
             },
             dismissButton = { TextButton(onClick = { pendingDeleteDocumentId = null }) { Text("Keep document") } }
         )
@@ -695,10 +691,8 @@ fun FilesScreen(context: Context) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TrackerScreen(context: Context) {
-    var entries by remember { mutableStateOf(ApplicationTrackerStore(context).all()) }
-    var interviews by remember {
-        mutableStateOf(InterviewStore(context).let { store -> try { store.all() } finally { store.close() } })
-    }
+    var entries by remember(context) { mutableStateOf(withTrackerStore(context) { it.all() }) }
+    var interviews by remember(context) { mutableStateOf(withInterviewStore(context) { it.all() }) }
     var pendingDeleteInterview by remember { mutableStateOf<InterviewRecord?>(null) }
     val scope = rememberCoroutineScope()
     var company by remember { mutableStateOf("") }
@@ -733,14 +727,18 @@ fun TrackerScreen(context: Context) {
                         minLines = 2
                     )
                     TextButton(onClick = {
-                        ApplicationTrackerStore(context).updateNotes(item.id, notes)
-                        entries = ApplicationTrackerStore(context).all()
+                        entries = withTrackerStore(context) { store ->
+                            store.updateNotes(item.id, notes)
+                            store.all()
+                        }
                     }) { Text("Save notes") }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         listOf("Saved", "Contacted", "Awaiting response", "Applied", "Interview", "Offer", "Rejected").forEach { stage ->
                             TextButton(onClick = {
-                                ApplicationTrackerStore(context).setStage(item.id, stage)
-                                entries = ApplicationTrackerStore(context).all()
+                                entries = withTrackerStore(context) { store ->
+                                    store.setStage(item.id, stage)
+                                    store.all()
+                                }
                             }) { Text(stage, fontSize = 9.sp) }
                         }
                     }

@@ -35,6 +35,41 @@ class LocalProfileStore(context: Context) {
         save(profile.toString())
     }
 
+    /**
+     * Removes extracted text only when it was sourced from the document being deleted.
+     * Returns false when the existing encrypted profile cannot be decrypted or saved.
+     */
+    fun clearExtractedDocumentText(documentId: String): Boolean {
+        require(documentId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Invalid document identifier." }
+        val stored = prefs.getString("profile", null) ?: return true
+        return runCatching {
+            val current = JSONObject(
+                String(
+                    decrypt(android.util.Base64.decode(stored, android.util.Base64.NO_WRAP)),
+                    Charsets.UTF_8
+                )
+            )
+            var changed = false
+            if (current.optString("cv_document_id") == documentId) {
+                current.remove("cv_document_id")
+                current.remove("cv_text")
+                changed = true
+            }
+            if (current.optString("last_document_id") == documentId) {
+                current.remove("last_document_id")
+                current.remove("last_document_text")
+                changed = true
+            }
+            if (!changed) {
+                true
+            } else {
+                val encrypted = encrypt(current.toString().toByteArray(Charsets.UTF_8))
+                val encoded = android.util.Base64.encodeToString(encrypted, android.util.Base64.NO_WRAP)
+                prefs.edit().putString("profile", encoded).commit()
+            }
+        }.getOrDefault(false)
+    }
+
     private fun encrypt(plain: ByteArray): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
