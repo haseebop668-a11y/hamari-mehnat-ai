@@ -491,6 +491,8 @@ fun FilesScreen(context: Context) {
     var cvPreview by remember { mutableStateOf("") }
     var extractedText by remember { mutableStateOf("") }
     var extractedFileName by remember { mutableStateOf("") }
+    var extractedDocumentId by remember { mutableStateOf("") }
+    var pendingDeleteDocumentId by remember { mutableStateOf<String?>(null) }
     var extractedContractReport by remember { mutableStateOf<EmploymentContractReport?>(null) }
     var expectedContractEmployer by remember { mutableStateOf("") }
     var expectedContractRole by remember { mutableStateOf("") }
@@ -518,6 +520,68 @@ fun FilesScreen(context: Context) {
         }
     }
 
+    if (pendingDeleteDocumentId != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteDocumentId = null },
+            title = { Text("Delete this document?") },
+            text = { Text("The encrypted source file will be removed. Any extracted CV/document text linked to this file will also be cleared from the encrypted profile.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = pendingDeleteDocumentId ?: return@TextButton
+                    pendingDeleteDocumentId = null
+                    scope.launch {
+                        message = "Deleting encrypted document and linked extracted text…"
+                        try {
+                            val result = withContext(Dispatchers.IO) {
+                                val removed = EncryptedDocumentVault(context).delete(id)
+                                if (!removed) {
+                                    false to true
+                                } else {
+                                    var profileCleanupSucceeded = true
+                                    runCatching {
+                                        val store = LocalProfileStore(context)
+                                        val profile = store.load()
+                                        if (profile != null) {
+                                            var changed = false
+                                            if (profile.optString("cv_document_id") == id) {
+                                                profile.remove("cv_document_id")
+                                                profile.remove("cv_text")
+                                                changed = true
+                                            }
+                                            if (profile.optString("last_document_id") == id) {
+                                                profile.remove("last_document_id")
+                                                profile.remove("last_document_text")
+                                                changed = true
+                                            }
+                                            if (changed) store.save(profile.toString())
+                                        }
+                                    }.onFailure { profileCleanupSucceeded = false }
+                                    true to profileCleanupSucceeded
+                                }
+                            }
+                            documentIds = withContext(Dispatchers.IO) { EncryptedDocumentVault(context).listIds() }
+                            if (extractedDocumentId == id) {
+                                extractedDocumentId = ""
+                                extractedText = ""
+                                extractedFileName = ""
+                                extractedContractReport = null
+                                cvPreview = ""
+                            }
+                            message = when {
+                                !result.first -> "Document was not found."
+                                result.second -> "Encrypted document and its linked extracted profile text were deleted."
+                                else -> "Document file deleted, but linked profile cleanup could not be verified. Review your local profile before sharing it."
+                            }
+                        } catch (error: Exception) {
+                            message = "Delete failed: ${error.message ?: error.javaClass.simpleName}"
+                        }
+                    }
+                }) { Text("Delete permanently") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDeleteDocumentId = null }) { Text("Keep document") } }
+        )
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("DOCUMENT ARCHIVE", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Text("Your private vault", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
@@ -542,10 +606,14 @@ fun FilesScreen(context: Context) {
                                     }
                                     val profile = LocalProfileStore(context).load() ?: org.json.JSONObject()
                                     val isCv = stored.document.originalName.contains(Regex("(?i)(cv|resume)"))
-                                    profile.put(if (isCv) "cv_text" else "last_document_text", extracted.text)
+                                    val textKey = if (isCv) "cv_text" else "last_document_text"
+                                    val sourceKey = if (isCv) "cv_document_id" else "last_document_id"
+                                    profile.put(textKey, extracted.text)
+                                    profile.put(sourceKey, id)
                                     LocalProfileStore(context).save(profile.toString())
                                     extractedText = extracted.text
                                     extractedFileName = stored.document.originalName
+                                    extractedDocumentId = id
                                     extractedContractReport = null
                                     cvPreview = extracted.text.take(2200)
                                     message = "Extracted ${extracted.text.length} characters from ${extracted.format} and saved the extracted text encrypted in your profile." + (extracted.warning?.let { " Note: $it" } ?: "")
@@ -554,11 +622,7 @@ fun FilesScreen(context: Context) {
                                 }
                             }
                         }) { Text("Extract text") }
-                        TextButton(onClick = {
-                            val deleted = EncryptedDocumentVault(context).delete(id)
-                            documentIds = EncryptedDocumentVault(context).listIds()
-                            message = if (deleted) "Encrypted document deleted." else "Document was not found."
-                        }) { Text("Delete") }
+                        TextButton(onClick = { pendingDeleteDocumentId = id }) { Text("Delete") }
                     }
                 }
             }
@@ -632,7 +696,11 @@ fun FilesScreen(context: Context) {
 @Composable
 fun TrackerScreen(context: Context) {
     var entries by remember { mutableStateOf(ApplicationTrackerStore(context).all()) }
-    var interviews by remember { mutableStateOf(InterviewStore(context).all()) }
+    var interviews by remember {
+        mutableStateOf(InterviewStore(context).let { store -> try { store.all() } finally { store.close() } })
+    }
+    var pendingDeleteInterview by remember { mutableStateOf<InterviewRecord?>(null) }
+    val scope = rememberCoroutineScope()
     var company by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("") }
     var dateTime by remember {
@@ -700,9 +768,19 @@ fun TrackerScreen(context: Context) {
                     locationOrLink = location.trim(),
                     notes = ""
                 )
-                InterviewReminderScheduler.schedule(context, interview)
-                InterviewStore(context).save(interview)
-                interviews = InterviewStore(context).all()
+                val store = InterviewStore(context)
+                try {
+                    check(store.save(interview)) { "The interview could not be stored." }
+                    try {
+                        InterviewReminderScheduler.schedule(context, interview)
+                    } catch (scheduleError: Exception) {
+                        store.delete(interview.id)
+                        throw scheduleError
+                    }
+                    interviews = store.all()
+                } finally {
+                    store.close()
+                }
                 interviewMessage = "Interview saved. A local reminder is scheduled for one hour before."
                 if (Build.VERSION.SDK_INT >= 33) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 company = ""
@@ -713,14 +791,43 @@ fun TrackerScreen(context: Context) {
             }
         }, modifier = Modifier.fillMaxWidth()) { Text("Save interview and reminder") }
         Text(interviewMessage, color = ScreenMuted, fontSize = 12.sp)
+        if (interviews.isEmpty()) Text("No interviews scheduled yet.", color = ScreenMuted)
         interviews.forEach { interview ->
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ScreenPanel)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("${interview.role} • ${interview.company}", fontWeight = FontWeight.SemiBold)
                     Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(interview.scheduledAtEpochMs)) + " • " + interview.timeZoneId, color = ScreenMuted, fontSize = 11.sp)
                     if (interview.locationOrLink.isNotBlank()) Text(interview.locationOrLink, color = ScreenMuted, fontSize = 11.sp)
+                    TextButton(onClick = { pendingDeleteInterview = interview }) { Text("Delete interview and reminder") }
                 }
             }
+        }
+        pendingDeleteInterview?.let { selected ->
+            AlertDialog(
+                onDismissRequest = { pendingDeleteInterview = null },
+                title = { Text("Delete interview and reminder?") },
+                text = { Text("Remove the saved interview for ${selected.role} at ${selected.company} and cancel its pending reminder?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pendingDeleteInterview = null
+                        scope.launch {
+                            try {
+                                val deleted = withContext(Dispatchers.IO) {
+                                    InterviewReminderScheduler.cancel(context, selected.id)
+                                    val store = InterviewStore(context)
+                                    try { store.delete(selected.id) } finally { store.close() }
+                                }
+                                val store = InterviewStore(context)
+                                interviews = try { store.all() } finally { store.close() }
+                                interviewMessage = if (deleted) "Interview and pending reminder deleted." else "Interview record was not found."
+                            } catch (error: Exception) {
+                                interviewMessage = "Could not delete interview: ${error.message ?: error.javaClass.simpleName}"
+                            }
+                        }
+                    }) { Text("Delete") }
+                },
+                dismissButton = { TextButton(onClick = { pendingDeleteInterview = null }) { Text("Keep") } }
+            )
         }
     }
 }

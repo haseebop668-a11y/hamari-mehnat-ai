@@ -28,7 +28,17 @@ data class TextExtractionResult(
 )
 
 class DocumentTextExtractor(private val context: Context) {
-    init { PDFBoxResourceLoader.init(context.applicationContext) }
+    init {
+        PDFBoxResourceLoader.init(context.applicationContext)
+        cleanupStaleOcrFiles()
+    }
+
+    private fun cleanupStaleOcrFiles() {
+        val cutoff = System.currentTimeMillis() - OCR_TEMP_RETENTION_MS
+        context.cacheDir.listFiles()
+            ?.filter { it.isFile && it.name.startsWith("hm-ocr-") && it.extension == "pdf" && it.lastModified() < cutoff }
+            ?.forEach { it.delete() }
+    }
 
     fun extract(fileName: String, bytes: ByteArray): TextExtractionResult {
         require(bytes.isNotEmpty()) { "Document is empty." }
@@ -61,7 +71,10 @@ class DocumentTextExtractor(private val context: Context) {
 
     private fun extractPdf(bytes: ByteArray): String =
         PDDocument.load(ByteArrayInputStream(bytes)).use { document ->
-            PDFTextStripper().getText(document)
+            require(document.numberOfPages in 1..MAX_PDF_PAGES) {
+                "PDF page count exceeds the $MAX_PDF_PAGES page extraction limit."
+            }
+            PDFTextStripper().getText(document).take(MAX_TEXT_CHARS)
         }
 
     private fun extractScannedPdf(bytes: ByteArray): String {
@@ -164,6 +177,8 @@ class DocumentTextExtractor(private val context: Context) {
 
     companion object {
         private const val MAX_TEXT_CHARS = 50_000
+        private const val MAX_PDF_PAGES = 100
+        private const val OCR_TEMP_RETENTION_MS = 60L * 60L * 1000L
         private const val MAX_DOCX_XML_BYTES = 8 * 1024 * 1024
         private const val MAX_DOCX_ENTRIES = 1_000
         private const val MAX_OCR_PAGES = 10

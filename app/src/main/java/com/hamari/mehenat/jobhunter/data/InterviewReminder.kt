@@ -17,9 +17,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
-import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 data class InterviewRecord(
@@ -73,7 +71,7 @@ class InterviewStore(context: Context) :
         }
     }
 
-    fun save(record: InterviewRecord) {
+    fun save(record: InterviewRecord): Boolean {
         val values = ContentValues().apply {
             put("id", record.id)
             put("application_id", record.applicationId)
@@ -84,7 +82,7 @@ class InterviewStore(context: Context) :
             put("location_or_link", LocalFieldCipher().encrypt(record.locationOrLink.take(1000)))
             put("notes", LocalFieldCipher().encrypt(record.notes.take(2000)))
         }
-        writableDatabase.insertWithOnConflict("interviews", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        return writableDatabase.insertWithOnConflict("interviews", null, values, SQLiteDatabase.CONFLICT_REPLACE) != -1L
     }
 
     fun all(): List<InterviewRecord> {
@@ -109,13 +107,21 @@ class InterviewStore(context: Context) :
 
 object InterviewReminderScheduler {
     fun rescheduleAll(context: Context) {
-        InterviewStore(context).all().forEach { interview ->
+        val store = InterviewStore(context)
+        val records = try {
+            store.all()
+        } finally {
+            store.close()
+        }
+        records.forEach { interview ->
             val delay = interview.scheduledAtEpochMs - System.currentTimeMillis() - TimeUnit.HOURS.toMillis(1)
             if (delay > 0L) runCatching { schedule(context, interview) }
         }
     }
 
     fun schedule(context: Context, interview: InterviewRecord) {
+        require(interview.id.matches(Regex("[0-9a-fA-F-]{36}"))) { "Interview identifier is invalid." }
+        ZoneId.of(interview.timeZoneId)
         val delay = interview.scheduledAtEpochMs - System.currentTimeMillis() - TimeUnit.HOURS.toMillis(1)
         require(delay > 0L) { "Interview must be more than one hour in the future." }
         // Keep personally identifying interview details out of WorkManager's own database.
@@ -132,6 +138,12 @@ object InterviewReminderScheduler {
             request
         )
     }
+
+    fun cancel(context: Context, interviewId: String) {
+        require(interviewId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Interview identifier is invalid." }
+        WorkManager.getInstance(context.applicationContext)
+            .cancelUniqueWork("interview-reminder-$interviewId")
+    }
 }
 
 class InterviewReminderWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
@@ -141,11 +153,6 @@ class InterviewReminderWorker(context: Context, params: WorkerParameters) : Work
                 ?: return Result.failure()
             val interview = InterviewStore(applicationContext).all()
                 .firstOrNull { it.id == interviewId } ?: return Result.success()
-            val company = interview.company
-            val role = interview.role
-            val timezone = interview.timeZoneId
-            val location = interview.locationOrLink
-            val scheduledAt = interview.scheduledAtEpochMs
             val channelId = "interview_reminders"
             val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -158,15 +165,15 @@ class InterviewReminderWorker(context: Context, params: WorkerParameters) : Work
                 applicationContext, 0, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val timestamp = Instant.ofEpochMilli(scheduledAt)
-                .atZone(ZoneId.of(timezone))
-                .format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy • HH:mm z"))
-            val body = listOf(timestamp, location).filter { it.isNotBlank() }.joinToString(" • ")
             val notification = NotificationCompat.Builder(applicationContext, channelId)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("Interview: $role at $company")
-                .setContentText(body.ifBlank { "Your interview is coming up." })
-                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setContentTitle("Interview reminder")
+                .setContentText("You have an upcoming interview. Open the app for details.")
+                .setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText("You have an upcoming interview. Open Hamari Mehnat to view the details stored on this device.")
+                )
                 .setContentIntent(pending)
                 .setAutoCancel(true)
                 .build()
