@@ -830,14 +830,24 @@ fun LocalAiScreen(context: Context) {
                 } else {
                     Text("Candidate basics collected. Review the profile, then generate a vacancy-specific draft.", color = FieldbookPalette.Forest, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
                     Button(
-                        enabled = loaded && !busy && cvCriteria.isNotBlank(),
+                        enabled = !busy && cvCriteria.isNotBlank(),
                         onClick = {
                             busy = true
-                            cvStatus = "Tailoring your CV locally against the supplied criteria…"
+                            progress = 0
+                            cvStatus = if (loaded) "Tailoring your CV locally against the supplied criteria…" else "Downloading the separate on-device CV model, verifying it and preparing your CV…"
                             scope.launch {
                                 try {
                                     val evidence = cvProfile.toString().take(5000)
                                     val output = withContext(Dispatchers.IO) {
+                                        if (!manager.verifyInstalled()) {
+                                            manager.deleteModel()
+                                            manager.downloadModel { percent -> progress = percent }
+                                        }
+                                        if (!loaded) {
+                                            check(NativeLlama.loadModel(manager.modelFile.absolutePath, 4096, 4)) {
+                                                "Native local model could not be loaded on this device."
+                                            }
+                                        }
                                         LocalAgentOrchestrator().execute(
                                             PersonalAgent.CV_TAILOR,
                                             "Create a clear, ATS-readable CV for this specific vacancy. Map each requirement to evidence in the candidate profile. Put strongest relevant truthful evidence first. Do not invent facts. Mark any unmet requirement as a question for the candidate. Target criteria:\\n$cvCriteria",
@@ -846,18 +856,22 @@ fun LocalAiScreen(context: Context) {
                                             512
                                         )
                                     }
+                                    loaded = true
                                     selectedAgent = PersonalAgent.CV_TAILOR
                                     agentOutput = output
                                     cvStatus = "Draft generated on-device. Review every fact and requirement before exporting."
                                 } catch (e: Exception) {
                                     cvStatus = "CV generation failed: ${e.message ?: e.javaClass.simpleName}"
+                                } catch (e: UnsatisfiedLinkError) {
+                                    cvStatus = "Local model runtime could not load: ${e.message}"
                                 } finally {
                                     busy = false
                                 }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Generate tailored CV with local AI") }
+                    ) { Text(if (loaded) "Generate tailored CV with local AI" else "Download local model and generate CV") }
+                    if (busy && progress > 0) LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
                 }
                 Text(cvStatus, color = ScreenMuted, fontSize = 11.sp)
             }
