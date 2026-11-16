@@ -30,7 +30,7 @@ This document separates source implementation, automated verification, and real-
 
 ### Implemented
 - Private document vault encrypted with Android Keystore AES-GCM.
-- PDF, DOCX and TXT local text extraction; files up to 25 MB and extracted text capped at 50,000 characters.
+- PDF, DOCX and TXT local text extraction; files up to 25 MB and extracted text capped at 50,000 characters. Scanned PDFs (up to 10 pages) and PNG/JPEG/WebP images use on-device Latin-script OCR with human-review warnings.
 - DOCX ZIP-entry and expanded XML limits, disabled document type declarations, and safe extraction bounds.
 - Imported filename and MIME metadata sanitization; temporary encrypted files are cleaned up after failed/interrupted writes.
 - Local specialist workflows for CV analysis, job matching, CV tailoring, cover letters, employer outreach, interview preparation and official-source explanation.
@@ -39,7 +39,7 @@ This document separates source implementation, automated verification, and real-
 - Local model download checks expected byte size and SHA-256, caps overlong downloads and cleans partial files.
 
 ### Limitations
-- OCR for scanned PDFs and images is not enabled.
+- OCR is Latin-script only; Urdu and other non-Latin scripts are not supported. Names, dates and ID numbers must be checked manually because OCR may misread them.
 - The local GGUF model is downloaded separately; it is not bundled into the APK. Urdu/Roman Urdu quality, RAM, speed, battery and thermal performance require phone testing.
 - AI output is a draft only. The user reviews all details and manually approves applications and messages.
 
@@ -59,7 +59,8 @@ This document separates source implementation, automated verification, and real-
 - Public feeds, Adzuna, Greenhouse and Lever are registered as independent connectors. `JobDiscoveryRepository` is the composition root; adding a provider does not require changing the matching engine or UI call sites.
 - The registry checks the local rate limiter before invoking a connector and isolates provider exceptions so one unavailable source does not cancel the entire search.
 - This is a safe Android plugin-style connector architecture, not arbitrary executable plugin installation. It does not download or run third-party code. Adzuna is the current user-authenticated API connector; its credentials remain encrypted in Android Keystore.
-- A generic remote MCP server client and user-configurable MCP server installation screen are not yet implemented. MCP servers can expose arbitrary tools and data access; adding that safely requires HTTPS Streamable HTTP transport, server identity/session handling, explicit per-tool permission prompts and a strict job-search tool schema. This is kept separate from the current API connector build rather than pretending a REST API key is an MCP connection.
+- A limited remote MCP Streamable HTTP client and connection screen are implemented for protocol version 2025-11-25. It supports HTTPS POST initialization, negotiated protocol headers, session IDs where supplied, JSON responses, bounded 1 MiB SSE response bodies, multiline SSE data fields and JSON-RPC response-ID matching.
+- This is not full MCP feature compatibility: standalone GET event streams, reconnect/resumption, server-initiated requests and OAuth are not implemented. Server tool annotations are untrusted metadata, not a security boundary. The UI filters discovery using readOnlyHint and requires a warning plus explicit user confirmation before every manually initiated tool call. Profile/documents are not automatically sent to the remote server.
 
 ### API audit and fixes in progress
 - Job source links now require a valid HTTPS URL with a host and no embedded user-info.
@@ -71,23 +72,22 @@ This document separates source implementation, automated verification, and real-
 - Tracker and interview personal text fields are now encrypted with a dedicated Android Keystore AES-GCM key; existing SQLite records are migrated on database upgrade.
 - Interview reminder work requests now persist only an interview UUID; reminder details are read from the encrypted local store. App startup refreshes older scheduled work to remove legacy plaintext input payloads.
 - Adzuna request failures do not echo credential-bearing URL details.
+- MCP response bodies are capped while streaming bytes into memory; the 1 MiB limit is checked before a larger response can be buffered.
+- Local model SHA-256 validation is cached for an unchanged app-private file fingerprint after the first successful verification or a verified download. The NativeLlama facade serializes load/generate/unload operations and avoids reloading the GGUF model for each prompt.
 - Provider registry regression tests cover unique IDs, explicit provider enablement and rate-limit enforcement.
-- Latest CI audit found a duplicate `KeyProperties` import in `AdzunaCredentialsStore.kt`; this compile blocker was removed and the connector registry was added. A fresh CI run is required before calling the build verified.
+- The earlier duplicate `KeyProperties` import in `AdzunaCredentialsStore.kt` was removed before the previous green baseline. The current hardening commit adds bounded MCP streaming, JSON-RPC ID matching, SSE regression coverage and a synchronized in-process local model runtime cache. Its own exact-commit CI run remains the verification gate.
 - Regression tests cover all-token matching, ISO country aliases, insecure link rejection and oversized official-source pages.
 - Android CI concurrency now groups push and pull-request runs by the same head branch to avoid duplicate builds.
 - API architecture: Android-side public API clients only; no separate REST backend is deployed, consistent with the Android-only single-user scope. Adzuna is optional and requires the user to register for personal API credentials. Country-specific official job-board API coverage remains incomplete where providers require credentials or expose no public API. Browser hand-offs remain explicitly labelled as such.
 - Security boundary: profile, document content, and personal tracker/interview text fields are encrypted with Android Keystore AES-GCM. Workflow metadata (IDs, stages, timestamps and time-zone identifiers) remains in app-private SQLite for querying; Android backup is disabled.
 
-### Automated verification — latest previously verified baseline
-- Previously verified source commit: `6faeebe311ad42fec30fb7bb539927b1cec13ee3`.
-- GitHub Actions run: https://github.com/haseebop668-a11y/hamari-mehnat-ai/actions/runs/43603338348.
-- Result: successful.
+### Automated verification — prior baseline and current gate
+- Previous verified baseline: commit `53e4e6d1b765c541ed0fd55e8bbaff9e2ab8c2b4`, GitHub Actions run https://github.com/haseebop668-a11y/hamari-mehnat-ai/actions/runs/43794068813, successful.
+- The previous green run does not verify later hardening commits. The current branch head must pass a new workflow run on the exact same source SHA before its APK can be called verified.
 - `assembleDebug`, `assembleRelease`, and `testDebugUnitTest`: passed.
 - Release minification/R8 and release packaging: passed.
 - Live smoke checks: Arbeitnow HTTP 200 (300 items), Remotive HTTP 200 (16), Himalayas HTTP 200 (20), Jobicy HTTP 200 (5), Hugging Face model metadata HTTP 200 and model binary range request HTTP 206 with GGUF header verified.
-- Debug APK artifact: `hamari-mehnat-debug-apk`, 28,344,632 bytes.
-- Artifact SHA-256: `2615665a85ea2355b1a3808999f2545655ba28b154f0cf331fdcc5bc8e604f67`.
-- Artifact: https://github.com/haseebop668-a11y/hamari-mehnat-ai/actions/runs/43603338348/artifacts/14117024547.
+- Do not reuse an APK from an earlier source commit as evidence for a later commit. Record the artifact ID, archive size and SHA-256 from the exact-head successful run.
 
 ### Remaining acceptance gates
 - Install and exercise the debug APK on a physical Android phone. Cloud CI cannot perform this on the user's device.
@@ -101,3 +101,11 @@ This document separates source implementation, automated verification, and real-
 - No automatic application submission, email sending, account scraping or CAPTCHA bypass.
 - Public job-feed and visa information is triage/research support, not a promise of sponsorship, hiring or visa eligibility.
 - Keep the repository private before adding personal project material or secrets.
+
+
+## Commercial and money-flow boundary
+
+- This release does not accept payments, subscriptions, deposits, bank/card details or transfer money.
+- Salary, hourly pay, deductions, leave, contract terms and currency are employment evidence for user review, not financial transactions or payroll calculations.
+- Adzuna app credentials authorize API requests only; they are not payment credentials. Provider quotas and commercial terms must be checked against the provider's current documentation before changing request rates or adding paid integrations.
+- Any future payment, premium tier or monetization feature requires a separate product decision and security/compliance review. It must not be silently added to this local-first release.

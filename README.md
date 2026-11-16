@@ -4,7 +4,7 @@ A private, single-owner Android application for international job discovery and 
 
 ## Product boundary
 
-- Android application only. No website, web dashboard, public registration, multi-user SaaS, subscription or cloud AI.
+- Android application only. No website, web dashboard, public registration, multi-user SaaS, subscriptions, payment processing, bank/card collection or cloud AI.
 - Personal profile, CV text and imported documents stay in app-private storage. Profile and document content are encrypted with Android Keystore AES-GCM.
 - Local AI runs through the pinned llama.cpp native runtime. The GGUF model is downloaded separately by the user and SHA-256 verified before it can be loaded.
 - Internet is used only for public job feeds, official government source research, and the initial model download. Local documents, cached profile, saved jobs, tracker, reminders and an installed local model remain available offline.
@@ -13,7 +13,7 @@ A private, single-owner Android application for international job discovery and 
 ## Implemented modules
 
 - **Profile:** encrypted owner profile with target roles, countries, skills and experience summary.
-- **Document vault:** PDF, DOCX, TXT and image import into app-private AES-GCM encrypted files. PDF/DOCX/TXT text extraction is local. Scanned-PDF/image OCR is not enabled.
+- **Document vault:** PDF, DOCX, TXT and image import into app-private AES-GCM encrypted files. PDF/DOCX/TXT text extraction is local; scanned PDFs (up to 10 pages) and PNG/JPEG/WebP images use bounded on-device Latin-script OCR. Urdu and other non-Latin OCR are not supported.
 - **Application PDF export:** local CV-tailoring and cover-letter drafts can be exported to a user-selected PDF location after review.
 - **Job discovery:** Arbeitnow, Remotive, Himalayas, Jobicy, optional Adzuna country API, Greenhouse public company boards and Lever public company boards. LinkedIn, Indeed, SEEK and EURES are browser hand-off links; login-protected pages are not scraped.
 - **Source compliance:** rate limits for public APIs, direct source/application URLs, source attribution, expiry filtering for Himalayas listings and no onward job-feed redistribution.
@@ -29,9 +29,11 @@ A private, single-owner Android application for international job discovery and 
 
 ## Connector Hub and CV & Application Studio
 
-Document imports also support on-device Latin-script OCR for scanned PDFs (up to 10 pages) and PNG/JPEG images. OCR output is clearly marked for human review; Urdu/non-Latin OCR is not supported in this release.\n\nThe Android Local AI tab now includes a warm editorial CV and application studio with guided candidate intake, vacancy-specific follow-up questions, tailored CV and cover-letter generation, encrypted local draft history, and PDF export. The first AI action automatically downloads and verifies the pinned local model.
+Document imports also support on-device Latin-script OCR for scanned PDFs (up to 10 pages) and PNG/JPEG images. OCR output is clearly marked for human review; Urdu/non-Latin OCR is not supported in this release.
 
-The Connector Hub supports individually enabled public job feeds, encrypted Adzuna app credentials, persistent Greenhouse/Lever board settings, and a guarded MCP Streamable HTTP client. MCP connections use HTTPS, discover server tools, and expose only tools marked read-only by the server; every call requires user confirmation. Remote code is never downloaded or executed.
+The Android Local AI tab now includes a warm editorial CV and application studio with guided candidate intake, vacancy-specific follow-up questions, tailored CV and cover-letter generation, encrypted local draft history, and PDF export. The first AI action automatically downloads and verifies the pinned local model.
+
+The Connector Hub supports individually enabled public job feeds, encrypted Adzuna app credentials, persistent Greenhouse/Lever board settings, and a limited MCP Streamable HTTP client (protocol version 2025-11-25). MCP POST responses support JSON or bounded 1 MiB SSE streams with request-ID matching. Standalone GET streams, reconnection/resumption, server-initiated requests and OAuth are not implemented. Server-provided read-only annotations are untrusted hints, not a security guarantee. Every manually selected tool call requires user review and explicit confirmation; profile and document data are not sent automatically. Remote code is never downloaded or executed.
 
 **Authorization limitations:** public feeds and Greenhouse/Lever company boards do not require personal login. Adzuna uses its app ID/key credentials. Provider-specific OAuth login is not enabled, and MCP servers requiring OAuth rather than bearer-token authorization are not supported in this release. LinkedIn, Indeed, SEEK and EURES remain official browser hand-offs, not connected APIs. This is not a generic executable plugin marketplace.
 

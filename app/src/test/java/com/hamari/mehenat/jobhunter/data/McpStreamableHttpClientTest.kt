@@ -49,7 +49,8 @@ class McpStreamableHttpClientTest {
     @Test fun refusesToCallToolsWithoutReadOnlyAnnotation() {
         enqueueInitialize()
         server.enqueue(MockResponse().setResponseCode(202))
-        server.enqueue(MockResponse().setBody("""{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"send_email","annotations":{"readOnlyHint":false}}]}}"""))
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json")
+            .setBody("""{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"send_email","annotations":{"readOnlyHint":false}}]}}"""))
         client.connect()
         try {
             client.callReadOnlyTool("send_email", JSONObject())
