@@ -52,8 +52,17 @@ fun McpConnectorCard() {
     if (pendingTool != null) {
         AlertDialog(
             onDismissRequest = { pendingTool = null },
-            title = { Text("Run this read-only tool?") },
-            text = { Text("The server labels this tool as read-only, but server-provided labels cannot be independently trusted. Only continue if you trust this MCP server and have reviewed the arguments.") },
+            title = { Text("Run the selected server tool?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val host = runCatching { java.net.URI(endpoint.trim()).host }.getOrNull()
+                        ?: "custom HTTPS endpoint"
+                    Text("Server host: $host", fontWeight = FontWeight.SemiBold)
+                    Text("Tool: \${pendingTool?.name.orEmpty()}")
+                    Text("Arguments to send:\n$arguments")
+                    Text("Security warning: read-only labels come from the server and are not trustworthy security controls. Only run this tool if you trust the server and have checked the tool and every argument. This app does not attach your profile or documents automatically.")
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
                     val tool = pendingTool ?: return@TextButton
@@ -70,7 +79,7 @@ fun McpConnectorCard() {
                             status = "Tool call failed: ${e.message ?: e.javaClass.simpleName}"
                         } finally { busy = false }
                     }
-                }) { Text("Run tool") }
+                }) { Text("Run selected tool") }
             },
             dismissButton = { TextButton(onClick = { pendingTool = null }) { Text("Cancel") } }
         )
@@ -85,7 +94,7 @@ fun McpConnectorCard() {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Text("MCP CONNECTOR", color = FieldbookPalette.Rust, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp)
             Text("Connect a trusted tool server", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, fontFamily = androidx.compose.ui.text.font.FontFamily.Serif)
-            Text("Supports MCP Streamable HTTP sessions and read-only tools. Use the server's HTTPS endpoint and optional bearer token. OAuth login is not enabled in this release; never paste your account password here.", color = FieldbookPalette.Muted, fontSize = 11.sp)
+            Text("Limited MCP Streamable HTTP support. Use an HTTPS endpoint and optional bearer token. Server read-only annotations are untrusted hints; review every tool and argument before running it. OAuth is not enabled, and account passwords must never be pasted here.", color = FieldbookPalette.Muted, fontSize = 11.sp)
             if (client == null) {
                 OutlinedTextField(endpoint, { endpoint = it }, label = { Text("MCP HTTPS endpoint") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 OutlinedTextField(token, { token = it }, label = { Text("Bearer token (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true, visualTransformation = PasswordVisualTransformation())
@@ -93,14 +102,19 @@ fun McpConnectorCard() {
                     enabled = endpoint.startsWith("https://") && !busy,
                     onClick = {
                         busy = true
-                        status = "Negotiating MCP session and discovering approved read-only tools…"
+                        status = "Negotiating an MCP session and discovering tools advertised as read-only…"
                         scope.launch {
                             try {
                                 val connection = withContext(Dispatchers.IO) {
                                     val newClient = McpStreamableHttpClient(endpoint.trim(), token.takeIf(String::isNotBlank))
-                                    val name = newClient.connect()
-                                    val available = newClient.listReadOnlyTools()
-                                    Triple(newClient, name, available)
+                                    try {
+                                        val name = newClient.connect()
+                                        val available = newClient.listReadOnlyTools()
+                                        Triple(newClient, name, available)
+                                    } catch (error: Exception) {
+                                        runCatching { newClient.disconnect() }
+                                        throw error
+                                    }
                                 }
                                 client = connection.first
                                 serverName = connection.second
@@ -118,7 +132,7 @@ fun McpConnectorCard() {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
                         Text(serverName, color = FieldbookPalette.Forest, fontWeight = FontWeight.SemiBold)
-                        Text("${tools.size} read-only tools discovered", color = FieldbookPalette.Muted, fontSize = 10.sp)
+                        Text("${tools.size} server-advertised read-only tools", color = FieldbookPalette.Muted, fontSize = 10.sp)
                     }
                     OutlinedButton(onClick = {
                         val active = client
@@ -153,8 +167,17 @@ fun McpConnectorCard() {
                 }
                 selectedTool?.let { tool ->
                     Text("Arguments for ${tool.name}", fontWeight = FontWeight.SemiBold, color = FieldbookPalette.Ink)
-                    OutlinedTextField(arguments, { arguments = it }, label = { Text("JSON object") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
-                    Button(onClick = { pendingTool = tool }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Review and run read-only tool") }
+                    if (tool.description.isNotBlank()) Text(tool.description, color = FieldbookPalette.Muted, fontSize = 11.sp)
+                    Text("Untrusted input schema: ${tool.inputSchema.toString().take(1000)}", color = FieldbookPalette.Muted, fontSize = 9.sp)
+                    OutlinedTextField(arguments, { arguments = it.take(2048) }, label = { Text("JSON object (max 2 KB)") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+                    Button(
+                        onClick = {
+                            if (runCatching { JSONObject(arguments) }.isSuccess && arguments.length <= 2048) pendingTool = tool
+                            else status = "Enter a valid JSON object no larger than 2 KB."
+                        },
+                        enabled = !busy && arguments.length <= 2048 && runCatching { JSONObject(arguments) }.isSuccess,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Review and run selected tool") }
                 }
                 if (result.isNotBlank()) {
                     Text("TOOL RESULT", color = FieldbookPalette.Rust, fontSize = 9.sp, fontWeight = FontWeight.Bold)

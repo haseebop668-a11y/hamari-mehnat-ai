@@ -84,9 +84,16 @@ class McpStreamableHttpClientTest {
             MockResponse()
                 .setHeader("Content-Type", "text/event-stream")
                 .setChunkedBody(
-                    "data: {\"jsonrpc\":\"2.0\",\"method\":\"notifications/progress\",\"params\":{}}\n\n" +
-                    "data: {\"jsonrpc\":\"2.0\",\"id\":\n" +
-                    "data: 2,\"result\":{\"tools\":[]}}\n\n",
+                    "data: {\n" +
+                    "data: \"jsonrpc\": \"2.0\",\n" +
+                    "data: \"method\": \"notifications/progress\",\n" +
+                    "data: \"params\": {}\n" +
+                    "data: }\n\n" +
+                    "data: {\n" +
+                    "data: \"jsonrpc\": \"2.0\",\n" +
+                    "data: \"id\": 2,\n" +
+                    "data: \"result\": {\"tools\": []}\n" +
+                    "data: }\n\n",
                     64
                 )
         )
