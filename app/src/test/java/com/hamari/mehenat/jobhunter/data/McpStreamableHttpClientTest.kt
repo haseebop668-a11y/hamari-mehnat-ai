@@ -107,7 +107,7 @@ class McpStreamableHttpClientTest {
                 "result",
                 JSONObject().put("resultType", "complete").put("tools", JSONArray())
             )
-            .toString(2)
+            .toString().replace(",", ",\n")
         val sseBody = "data: $progressEvent\n\n" +
             responseEvent.lineSequence().joinToString("\n") { "data: $it" } + "\n\n"
         server.enqueue(
