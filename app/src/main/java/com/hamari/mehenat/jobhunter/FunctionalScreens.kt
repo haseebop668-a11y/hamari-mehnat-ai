@@ -740,21 +740,6 @@ fun LocalAiScreen(context: Context) {
     var pdfExportStatus by remember { mutableStateOf("") }
     var selectedAgent by remember { mutableStateOf(PersonalAgent.CV_ANALYST) }
     var agentMenuOpen by remember { mutableStateOf(false) }
-    var cvProfile by remember { mutableStateOf(LocalProfileStore(context).load() ?: org.json.JSONObject()) }
-    var cvAnswer by remember { mutableStateOf("") }
-    var cvCriteria by remember { mutableStateOf("") }
-    var cvStatus by remember { mutableStateOf("Add the target vacancy first. The guide will collect missing candidate facts one at a time.") }
-    val cvFields = listOf(
-        "full_name" to "What is your full legal name?",
-        "email" to "What email address should appear on your CV?",
-        "phone" to "What phone number should appear on your CV?",
-        "education_summary" to "What is your education? Include school, qualification and dates if known.",
-        "work_history" to "Describe your work history: employer, role, dates and your real duties.",
-        "skills" to "List the practical skills you can genuinely demonstrate.",
-        "certifications" to "Which licences, certificates or training have you completed? Write none if you have none.",
-        "languages" to "Which languages do you speak, and at what level?"
-    )
-    val nextCvField = cvFields.firstOrNull { cvProfile.optString(it.first).isBlank() }
     val scope = rememberCoroutineScope()
     val manager = remember(context) { LocalModelManager(context) }
     val pdfExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
@@ -779,104 +764,8 @@ fun LocalAiScreen(context: Context) {
         Text("ON-DEVICE STUDIO", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Text("Your private assistant", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
         Text("Local model runtime is the required V1 path. No cloud AI provider will receive your CV.", color = ScreenMuted, fontSize = 12.sp)
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = ScreenPanel),
-            border = BorderStroke(1.dp, FieldbookPalette.Rule)
-        ) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text("GUIDED CV BUILDER", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.3.sp)
-                Text("Build a truthful CV for one vacancy", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif)
-                Text("Paste the job description or selection criteria. The app then asks for missing candidate details one question at a time and saves each answer in your encrypted local profile.", color = ScreenMuted, fontSize = 11.sp)
-                OutlinedTextField(
-                    value = cvCriteria,
-                    onValueChange = { cvCriteria = it },
-                    label = { Text("Target job description / employer criteria") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3
-                )
-                if (nextCvField != null) {
-                    Text("NEXT QUESTION · ${cvFields.indexOf(nextCvField) + 1} OF ${cvFields.size}", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    Text(nextCvField.second, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    OutlinedTextField(
-                        value = cvAnswer,
-                        onValueChange = { cvAnswer = it },
-                        label = { Text("Your answer") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 2
-                    )
-                    Button(
-                        enabled = cvAnswer.isNotBlank() && !busy,
-                        onClick = {
-                            val updated = org.json.JSONObject(cvProfile.toString()).put(nextCvField.first, cvAnswer.trim())
-                            try {
-                                LocalProfileStore(context).save(updated.toString())
-                                cvProfile = updated
-                                cvAnswer = ""
-                                cvStatus = "Saved securely. Next question selected automatically."
-                            } catch (e: Exception) {
-                                cvStatus = "Could not save answer: ${e.message ?: e.javaClass.simpleName}"
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Save answer and continue") }
-                    TextButton(onClick = {
-                        val updated = org.json.JSONObject(cvProfile.toString()).put(nextCvField.first, "Not provided")
-                        LocalProfileStore(context).save(updated.toString())
-                        cvProfile = updated
-                        cvAnswer = ""
-                        cvStatus = "Skipped. The CV agent will not invent this information."
-                    }, enabled = !busy) { Text("Skip this question") }
-                } else {
-                    Text("Candidate basics collected. Review the profile, then generate a vacancy-specific draft.", color = FieldbookPalette.Forest, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-                    Button(
-                        enabled = !busy && cvCriteria.isNotBlank(),
-                        onClick = {
-                            busy = true
-                            progress = 0
-                            cvStatus = if (loaded) "Tailoring your CV locally against the supplied criteria…" else "Downloading the separate on-device CV model, verifying it and preparing your CV…"
-                            scope.launch {
-                                try {
-                                    val evidence = cvProfile.toString().take(5000)
-                                    val output = withContext(Dispatchers.IO) {
-                                        if (!manager.verifyInstalled()) {
-                                            manager.deleteModel()
-                                            manager.downloadModel { percent -> progress = percent }
-                                        }
-                                        if (!loaded) {
-                                            check(NativeLlama.loadModel(manager.modelFile.absolutePath, 4096, 4)) {
-                                                "Native local model could not be loaded on this device."
-                                            }
-                                        }
-                                        LocalAgentOrchestrator().execute(
-                                            PersonalAgent.CV_TAILOR,
-                                            "Create a clear, ATS-readable CV for this specific vacancy. Map each requirement to evidence in the candidate profile. Put strongest relevant truthful evidence first. Do not invent facts. Mark any unmet requirement as a question for the candidate. Target criteria:\\n$cvCriteria",
-                                            evidence,
-                                            cvCriteria.take(5000),
-                                            512
-                                        )
-                                    }
-                                    loaded = true
-                                    selectedAgent = PersonalAgent.CV_TAILOR
-                                    agentOutput = output
-                                    cvStatus = "Draft generated on-device. Review every fact and requirement before exporting."
-                                } catch (e: Exception) {
-                                    cvStatus = "CV generation failed: ${e.message ?: e.javaClass.simpleName}"
-                                } catch (e: UnsatisfiedLinkError) {
-                                    cvStatus = "Local model runtime could not load: ${e.message}"
-                                } finally {
-                                    busy = false
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (loaded) "Generate tailored CV with local AI" else "Download local model and generate CV") }
-                    if (busy && progress > 0) LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
-                }
-                Text(cvStatus, color = ScreenMuted, fontSize = 11.sp)
-            }
-        }
-        Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
+        CvApplicationStudio(context)
+Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("LFM2.5 1.2B — QAD Q4_0", color = ScreenGold, fontWeight = FontWeight.SemiBold)
                 Text("Teacher-distilled quantization-aware checkpoint • about 696 MB • Hugging Face • free LFM Open License (terms apply). The model is downloaded to private app storage and SHA-256 verified before loading.", color = ScreenMuted, fontSize = 12.sp)
