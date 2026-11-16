@@ -37,6 +37,6 @@ There is no universal OAuth login that can be applied to every job provider. Eac
 - It can draft either a tailored CV or a cover letter, stores up to eight local document versions, and exports the selected draft as PDF. Every draft remains user-reviewed; no application or message is sent.
 - Added an MCP Streamable HTTP client for HTTPS endpoints with session initialization, negotiated protocol version, optional bearer authorization, tool discovery and JSON/SSE response handling.
 - MCP tool execution is limited to tools advertised with `annotations.readOnlyHint=true` and not `destructiveHint=true`. Each call requires a separate in-app user confirmation. Remote code is never downloaded or executed.
-- MCP bearer tokens are held only in the current screen's memory and cleared on disconnect. The connector does not collect account passwords.
+- MCP bearer tokens are held only in the current screen's memory and cleared on disconnect. The client sends an MCP session DELETE when disconnecting where the server supports it. The connector does not collect account passwords.
 - Provider-specific OAuth login is not enabled: the current job data sources do not share one OAuth system. Adzuna uses developer-issued app ID/key credentials; public feeds and company ATS boards do not require user login. MCP servers that require OAuth rather than a bearer token are not supported by this release and must not be labelled as connected.
 - Unit tests cover MCP HTTPS/session handling and read-only tool restrictions; the complete Android CI run is the release gate.
