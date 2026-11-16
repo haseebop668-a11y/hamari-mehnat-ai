@@ -27,6 +27,10 @@ A private, single-owner Android application for international job discovery and 
 - **AEWV agreement review:** checks pasted or extracted contract text for missing core terms, weekly hours, pay, trial-period wording, employer/job-title mismatches and common exploitation red flags. This is a first-pass checklist, not legal advice.
 - **Scheduled discovery:** WorkManager runs every 12 hours only while network connectivity is available, rotates configured target roles and stores matching vacancies locally.
 
+## Connector Hub and guided CV
+
+See [docs/CONNECTOR_HUB_AND_GUIDED_CV.md](docs/CONNECTOR_HUB_AND_GUIDED_CV.md) for the Android connector hub, per-provider enablement, secure Adzuna connection, guided candidate intake, and automatic local-model download for criteria-based CV drafting. Public feeds require no login; Adzuna currently uses developer-issued app ID/key credentials; Greenhouse and Lever use public company board identifiers. LinkedIn, Indeed and SEEK remain browser hand-offs, not connected APIs. No universal OAuth or generic MCP transport is claimed.
+
 ## Multi-country support
 
 The Android core is country-neutral. Immigration requirements and official verification entry points are registered as country modules rather than embedded in the shared matcher.
