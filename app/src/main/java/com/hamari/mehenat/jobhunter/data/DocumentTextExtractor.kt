@@ -45,11 +45,11 @@ class DocumentTextExtractor(private val context: Context) {
             }
             lower.endsWith(".docx") -> extractDocx(bytes)
             lower.endsWith(".txt") -> String(bytes, Charsets.UTF_8)
-            lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> {
+            lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp") -> {
                 warning = "On-device Latin-script OCR was used for this image. Review names, numbers and dates carefully."
                 extractImage(bytes)
             }
-            else -> error("Text extraction supports PDF, DOCX, TXT, PNG and JPEG.")
+            else -> error("Text extraction supports PDF, DOCX, TXT, PNG, JPEG and WebP.")
         }
         val text = extracted.replace(Regex("[\\t\\r ]+"), " ")
             .replace(Regex("\\n{3,}"), "\\n\\n")
