@@ -58,7 +58,7 @@ fun McpConnectorCard() {
                     val host = runCatching { java.net.URI(endpoint.trim()).host }.getOrNull()
                         ?: "custom HTTPS endpoint"
                     Text("Server host: $host", fontWeight = FontWeight.SemiBold)
-                    Text("Tool: \${pendingTool?.name.orEmpty()}")
+                    Text("Tool: ${pendingTool?.name.orEmpty()}")
                     Text("Arguments to send:\n$arguments")
                     Text("Security warning: read-only labels come from the server and are not trustworthy security controls. Only run this tool if you trust the server and have checked the tool and every argument. This app does not attach your profile or documents automatically.")
                 }

@@ -103,6 +103,7 @@ fun CvApplicationStudio(context: Context) {
     }
 
     fun saveProfile(updated: JSONObject) {
+        store.loadForUpdate()
         store.save(updated.toString())
         profile = updated
     }

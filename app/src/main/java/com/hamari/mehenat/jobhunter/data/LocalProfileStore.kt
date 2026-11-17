@@ -29,8 +29,20 @@ class LocalProfileStore(context: Context) {
         } catch (_: Exception) { null }
     }
 
+    /**
+     * Loads an existing profile for mutation without treating decryption failure
+     * as an empty profile. This prevents callers from silently overwriting data
+     * when the Keystore key is unavailable or the stored ciphertext is corrupt.
+     */
+    fun loadForUpdate(): JSONObject {
+        if (prefs.getString("profile", null) == null) return JSONObject()
+        return load() ?: throw IllegalStateException(
+            "The existing encrypted profile could not be opened. No profile changes were saved."
+        )
+    }
+
     fun saveTargetRoles(roles: List<String>) {
-        val profile = load() ?: JSONObject()
+        val profile = loadForUpdate()
         profile.put("target_roles", JSONArray(roles.map { it.trim() }.filter { it.isNotBlank() }.distinct()))
         save(profile.toString())
     }

@@ -117,25 +117,35 @@ fun JobsScreen(context: Context) {
                     loading = true
                     status = "Connecting to public job APIs…"
                     scope.launch {
-                        val countryList = countries.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                        val sourceResults = withContext(Dispatchers.IO) {
-                            JobDiscoveryRepository(context).search(
-                                query = query,
-                                countries = countryList,
-                                greenhouseBoards = greenhouseBoards.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                                leverSites = leverSites.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                                adzunaCredentials = AdzunaCredentialsStore(context).load(),
-                                enabledProviderIds = com.hamari.mehenat.jobhunter.data.ConnectorPreferences(context).enabledIds()
-                            )
+                        try {
+                            val searchQuery = query.trim()
+                            val countryList = countries.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                            require(countryList.isNotEmpty()) { "Enter at least one target country." }
+                            val greenhouseBoardList = greenhouseBoards.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                            val leverSiteList = leverSites.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                            val sourceResults = withContext(Dispatchers.IO) {
+                                JobDiscoveryRepository(context).search(
+                                    query = searchQuery,
+                                    countries = countryList,
+                                    greenhouseBoards = greenhouseBoardList,
+                                    leverSites = leverSiteList,
+                                    adzunaCredentials = AdzunaCredentialsStore(context).load(),
+                                    enabledProviderIds = com.hamari.mehenat.jobhunter.data.ConnectorPreferences(context).enabledIds()
+                                )
+                            }
+                            val freshResults = JobFreshnessService.removeExpired(sourceResults.flatMap { it.jobs })
+                            results = freshResults
+                            val failures = sourceResults.filter { it.error != null }.joinToString { "${it.source}: ${it.error}" }
+                            status = if (failures.isBlank()) {
+                                "Search completed. ${freshResults.size} vacancies retrieved from ${sourceResults.size} enabled sources."
+                            } else {
+                                "Partial results. Source errors: $failures"
+                            }
+                        } catch (error: Exception) {
+                            status = "Job search failed: ${error.message ?: error.javaClass.simpleName}. Your previous results were kept."
+                        } finally {
+                            loading = false
                         }
-                        results = JobFreshnessService.removeExpired(sourceResults.flatMap { it.jobs })
-                        val failures = sourceResults.filter { it.error != null }.joinToString { "${it.source}: ${it.error}" }
-                        status = if (failures.isBlank()) {
-                            "Search completed. ${results.size} vacancies retrieved from ${sourceResults.size} public sources."
-                        } else {
-                            "Partial results. Source errors: $failures"
-                        }
-                        loading = false
                     }
                 }
             },
@@ -255,25 +265,32 @@ fun JobsScreen(context: Context) {
                     visaLoading = true
                     visaStatus = "Fetching official government pages…"
                     scope.launch {
-                        val selected = OfficialVisaSources.sources.filter { it.country.equals(visaCountry.trim(), true) }
-                        val fetched = withContext(Dispatchers.IO) {
-                            selected.map { OfficialVisaResearchClient().fetch(it) }
+                        try {
+                            val countrySnapshot = visaCountry.trim()
+                            val selected = OfficialVisaSources.sources.filter { it.country.equals(countrySnapshot, true) }
+                            val fetched = withContext(Dispatchers.IO) {
+                                selected.map { OfficialVisaResearchClient().fetch(it) }
+                            }
+                            visaResults = fetched
+                            val evidence = fetched.filter { it.error == null && it.text.isNotBlank() }.joinToString("\\n\\n") {
+                                "SOURCE: ${it.source.country} — ${it.source.title}\\nURL: ${it.source.url}\\nRetrieved: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it.retrievedAtEpochMs))}\\nEXCERPT: ${it.text}"
+                            }
+                            if (evidence.isNotBlank()) {
+                                val profileStore = LocalProfileStore(context)
+                                val profile = profileStore.loadForUpdate()
+                                profile.put("official_visa_evidence", evidence.take(40000))
+                                profileStore.save(profile.toString())
+                            }
+                            visaStatus = if (fetched.isEmpty()) {
+                                "No official sources are registered for this country yet."
+                            } else {
+                                "Fetched ${fetched.count { it.error == null }} of ${fetched.size} registered official pages. Evidence is stored locally."
+                            }
+                        } catch (error: Exception) {
+                            visaStatus = "Official visa research failed: ${error.message ?: error.javaClass.simpleName}. Previous evidence was kept."
+                        } finally {
+                            visaLoading = false
                         }
-                        visaResults = fetched
-                        val evidence = fetched.filter { it.error == null && it.text.isNotBlank() }.joinToString("\\n\\n") {
-                            "SOURCE: ${it.source.country} — ${it.source.title}\\nURL: ${it.source.url}\\nRetrieved: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it.retrievedAtEpochMs))}\\nEXCERPT: ${it.text}"
-                        }
-                        if (evidence.isNotBlank()) {
-                            val profile = LocalProfileStore(context).load() ?: org.json.JSONObject()
-                            profile.put("official_visa_evidence", evidence.take(40000))
-                            LocalProfileStore(context).save(profile.toString())
-                        }
-                        visaStatus = if (fetched.isEmpty()) {
-                            "No official sources are registered for this country yet."
-                        } else {
-                            "Fetched ${fetched.count { it.error == null }} of ${fetched.size} registered official pages. Evidence is stored locally."
-                        }
-                        visaLoading = false
                     }
                 }
             },
@@ -600,7 +617,7 @@ fun FilesScreen(context: Context) {
                                         val extracted = DocumentTextExtractor(context).extract(stored.document.originalName, stored.bytes)
                                         stored to extracted
                                     }
-                                    val profile = LocalProfileStore(context).load() ?: org.json.JSONObject()
+                                    val profile = LocalProfileStore(context).loadForUpdate()
                                     val isCv = stored.document.originalName.contains(Regex("(?i)(cv|resume)"))
                                     val textKey = if (isCv) "cv_text" else "last_document_text"
                                     val sourceKey = if (isCv) "cv_document_id" else "last_document_id"

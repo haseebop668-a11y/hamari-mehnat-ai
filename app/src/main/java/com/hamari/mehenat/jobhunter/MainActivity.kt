@@ -365,7 +365,8 @@ private fun HomeScreen(context: Context, onNavigate: (Int) -> Unit) {
                                 val split = { value: String ->
                                     JSONArray(value.split(",").map { it.trim() }.filter { it.isNotBlank() }.distinct())
                                 }
-                                val profile = JSONObject()
+                                val profileStore = LocalProfileStore(context)
+                                val profile = profileStore.loadForUpdate()
                                     .put("full_name", fullName.trim())
                                     .put("email", email.trim())
                                     .put("phone", phone.trim())
@@ -373,7 +374,7 @@ private fun HomeScreen(context: Context, onNavigate: (Int) -> Unit) {
                                     .put("target_countries", split(countries))
                                     .put("skills", split(skills))
                                     .put("experience_summary", experience.trim())
-                                LocalProfileStore(context).save(profile.toString())
+                                profileStore.save(profile.toString())
                                 profileMessage = "Profile saved encrypted on this device."
                                 profileExpanded = false
                             } catch (e: Exception) {
