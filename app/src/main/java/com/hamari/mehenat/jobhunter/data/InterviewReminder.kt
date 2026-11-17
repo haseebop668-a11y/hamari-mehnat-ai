@@ -17,9 +17,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
-import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 data class InterviewRecord(
@@ -34,7 +32,7 @@ data class InterviewRecord(
 )
 
 class InterviewStore(context: Context) :
-    SQLiteOpenHelper(context.applicationContext, "personal_interviews.db", null, 1) {
+    SQLiteOpenHelper(context.applicationContext, "personal_interviews.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
             """CREATE TABLE interviews (
@@ -50,20 +48,41 @@ class InterviewStore(context: Context) :
         )
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) encryptLegacyRows(db)
+    }
 
-    fun save(record: InterviewRecord) {
+    private fun encryptLegacyRows(db: SQLiteDatabase) {
+        val cipher = LocalFieldCipher()
+        val rows = mutableListOf<Array<String>>()
+        db.rawQuery("SELECT id, company, role, location_or_link, notes FROM interviews", null).use { cursor ->
+            while (cursor.moveToNext()) {
+                rows += arrayOf(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3), cursor.getString(4))
+            }
+        }
+        rows.forEach { row ->
+            val values = ContentValues().apply {
+                put("company", cipher.encryptIfNeeded(row[1]))
+                put("role", cipher.encryptIfNeeded(row[2]))
+                put("location_or_link", cipher.encryptIfNeeded(row[3]))
+                put("notes", cipher.encryptIfNeeded(row[4]))
+            }
+            db.update("interviews", values, "id = ?", arrayOf(row[0]))
+        }
+    }
+
+    fun save(record: InterviewRecord): Boolean {
         val values = ContentValues().apply {
             put("id", record.id)
             put("application_id", record.applicationId)
-            put("company", record.company.take(300))
-            put("role", record.role.take(300))
+            put("company", LocalFieldCipher().encrypt(record.company.take(300)))
+            put("role", LocalFieldCipher().encrypt(record.role.take(300)))
             put("scheduled_at", record.scheduledAtEpochMs)
             put("timezone", record.timeZoneId.take(80))
-            put("location_or_link", record.locationOrLink.take(1000))
-            put("notes", record.notes.take(2000))
+            put("location_or_link", LocalFieldCipher().encrypt(record.locationOrLink.take(1000)))
+            put("notes", LocalFieldCipher().encrypt(record.notes.take(2000)))
         }
-        writableDatabase.insertWithOnConflict("interviews", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+        return writableDatabase.insertWithOnConflict("interviews", null, values, SQLiteDatabase.CONFLICT_REPLACE) != -1L
     }
 
     fun all(): List<InterviewRecord> {
@@ -75,8 +94,8 @@ class InterviewStore(context: Context) :
         ).use { cursor ->
             while (cursor.moveToNext()) {
                 items += InterviewRecord(
-                    cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getString(3),
-                    cursor.getLong(4), cursor.getString(5), cursor.getString(6), cursor.getString(7)
+                    cursor.getString(0), cursor.getString(1), LocalFieldCipher().decrypt(cursor.getString(2)), LocalFieldCipher().decrypt(cursor.getString(3)),
+                    cursor.getLong(4), cursor.getString(5), LocalFieldCipher().decrypt(cursor.getString(6)), LocalFieldCipher().decrypt(cursor.getString(7))
                 )
             }
         }
@@ -87,16 +106,27 @@ class InterviewStore(context: Context) :
 }
 
 object InterviewReminderScheduler {
+    fun rescheduleAll(context: Context) {
+        val store = InterviewStore(context)
+        val records = try {
+            store.all()
+        } finally {
+            store.close()
+        }
+        records.forEach { interview ->
+            val delay = interview.scheduledAtEpochMs - System.currentTimeMillis() - TimeUnit.HOURS.toMillis(1)
+            if (delay > 0L) runCatching { schedule(context, interview) }
+        }
+    }
+
     fun schedule(context: Context, interview: InterviewRecord) {
+        require(interview.id.matches(Regex("[0-9a-fA-F-]{36}"))) { "Interview identifier is invalid." }
+        ZoneId.of(interview.timeZoneId)
         val delay = interview.scheduledAtEpochMs - System.currentTimeMillis() - TimeUnit.HOURS.toMillis(1)
         require(delay > 0L) { "Interview must be more than one hour in the future." }
+        // Keep personally identifying interview details out of WorkManager's own database.
         val data = Data.Builder()
             .putString("interview_id", interview.id)
-            .putString("company", interview.company)
-            .putString("role", interview.role)
-            .putLong("scheduled_at", interview.scheduledAtEpochMs)
-            .putString("timezone", interview.timeZoneId)
-            .putString("location", interview.locationOrLink)
             .build()
         val request = OneTimeWorkRequestBuilder<InterviewReminderWorker>()
             .setInitialDelay(delay, TimeUnit.MILLISECONDS)
@@ -108,16 +138,25 @@ object InterviewReminderScheduler {
             request
         )
     }
+
+    fun cancel(context: Context, interviewId: String) {
+        require(interviewId.matches(Regex("[0-9a-fA-F-]{36}"))) { "Interview identifier is invalid." }
+        WorkManager.getInstance(context.applicationContext)
+            .cancelUniqueWork("interview-reminder-$interviewId")
+    }
 }
 
 class InterviewReminderWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
     override fun doWork(): Result {
         return try {
-            val company = inputData.getString("company").orEmpty()
-            val role = inputData.getString("role").orEmpty()
-            val timezone = inputData.getString("timezone").orEmpty()
-            val location = inputData.getString("location").orEmpty()
-            val scheduledAt = inputData.getLong("scheduled_at", 0L)
+            val interviewId = inputData.getString("interview_id")
+                ?: return Result.failure()
+            val store = InterviewStore(applicationContext)
+            val interview = try {
+                store.all().firstOrNull { it.id == interviewId }
+            } finally {
+                store.close()
+            } ?: return Result.success()
             val channelId = "interview_reminders"
             val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -130,15 +169,15 @@ class InterviewReminderWorker(context: Context, params: WorkerParameters) : Work
                 applicationContext, 0, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            val timestamp = Instant.ofEpochMilli(scheduledAt)
-                .atZone(ZoneId.of(timezone))
-                .format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy • HH:mm z"))
-            val body = listOf(timestamp, location).filter { it.isNotBlank() }.joinToString(" • ")
             val notification = NotificationCompat.Builder(applicationContext, channelId)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("Interview: $role at $company")
-                .setContentText(body.ifBlank { "Your interview is coming up." })
-                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setContentTitle("Interview reminder")
+                .setContentText("You have an upcoming interview. Open the app for details.")
+                .setStyle(
+                    NotificationCompat.BigTextStyle()
+                        .bigText("You have an upcoming interview. Open Hamari Mehnat to view the details stored on this device.")
+                )
                 .setContentIntent(pending)
                 .setAutoCancel(true)
                 .build()

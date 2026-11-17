@@ -1,14 +1,14 @@
 name: Android CI
 on:
   push:
-    branches: ["android/**"]
+    branches: ["android/**", "feature/**"]
   pull_request:
     branches: ["android/**"]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: android-ci-${{ github.ref }}
+  group: android-ci-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
   android:
@@ -31,9 +31,15 @@ jobs:
         run: git -C vendor/llama.cpp rev-parse HEAD
       - name: Assemble ARM64 debug APK and run unit tests
         run: gradle --no-daemon assembleDebug assembleRelease testDebugUnitTest
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-reports
+          path: app/build/reports/tests/testDebugUnitTest/
+          if-no-files-found: warn
       - name: Live public API and model endpoint smoke checks
         run: python scripts/live_api_smoke.py
-        continue-on-error: true
       - uses: actions/upload-artifact@v4
         with:
           name: hamari-mehnat-debug-apk

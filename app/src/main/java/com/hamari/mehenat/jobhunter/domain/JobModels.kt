@@ -32,5 +32,6 @@ data class JobMatch(
     val jobId: String,
     val score: Int,
     val sponsorship: SponsorshipSignal,
-    val reasons: List<String>
+    val reasons: List<String>,
+    val countryAssessment: CountryJobAssessment? = null
 )

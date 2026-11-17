@@ -10,6 +10,7 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.hamari.mehenat.jobhunter.domain.JobMatcher
 import com.hamari.mehenat.jobhunter.domain.JobProfile
+import com.hamari.mehenat.jobhunter.domain.JobFreshnessService
 import org.json.JSONArray
 import java.util.concurrent.TimeUnit
 
@@ -26,13 +27,32 @@ class AutoJobSearchWorker(context: Context, params: WorkerParameters) : Worker(c
             val cursor = prefs.getInt("role_cursor", 0).coerceAtLeast(0) % roles.size
             val query = roles[cursor]
             prefs.edit().putInt("role_cursor", (cursor + 1) % roles.size).apply()
-            val sources = JobDiscoveryRepository(applicationContext).search(query, countries)
+            val connectorPreferences = ConnectorPreferences(applicationContext)
+            val enabledProviderIds = connectorPreferences.enabledIds()
+            val adzunaCredentials = if ("adzuna" in enabledProviderIds) {
+                AdzunaCredentialsStore(applicationContext).load()
+            } else null
+            val greenhouseBoards = if ("greenhouse" in enabledProviderIds) {
+                connectorPreferences.greenhouseBoards().split(",").map { it.trim() }.filter { it.isNotBlank() }
+            } else emptyList()
+            val leverSites = if ("lever" in enabledProviderIds) {
+                connectorPreferences.leverSites().split(",").map { it.trim() }.filter { it.isNotBlank() }
+            } else emptyList()
+            val sources = JobDiscoveryRepository(applicationContext).search(
+                query = query,
+                countries = countries,
+                greenhouseBoards = greenhouseBoards,
+                leverSites = leverSites,
+                adzunaCredentials = adzunaCredentials,
+                enabledProviderIds = enabledProviderIds
+            )
+            if (sources.isEmpty()) return Result.success()
             if (sources.all { it.error != null }) return Result.retry()
 
             val matcher = JobMatcher()
             val tracker = ApplicationTrackerStore(applicationContext)
             try {
-                sources.flatMap { it.jobs }.distinctBy { it.id }.forEach { job ->
+                JobFreshnessService.removeExpired(sources.flatMap { it.jobs }).forEach { job ->
                     val match = matcher.evaluate(
                         job,
                         JobProfile(targetRoles = roles, targetCountries = countries, skills = skills)

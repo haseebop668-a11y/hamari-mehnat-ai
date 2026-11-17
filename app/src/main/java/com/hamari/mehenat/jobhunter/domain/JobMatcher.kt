@@ -12,7 +12,17 @@ class JobMatcher {
         "mining utility worker" to listOf("mine site utility", "utility worker", "village utility", "mine services"),
         "driller offsider" to listOf("drillers assistant", "drilling assistant"),
         "welder" to listOf("fabricator", "metal fabricator", "welding"),
-        "forklift operator" to listOf("forklift driver")
+        "forklift operator" to listOf("forklift driver"),
+        "civil labourer" to listOf("civil laborer", "road worker", "roadworks labourer", "infrastructure worker"),
+        "road worker" to listOf("roadworks", "traffic management", "civil construction"),
+        "plant operator" to listOf("excavator operator", "loader operator", "heavy machinery operator"),
+        "excavator operator" to listOf("digger operator", "earthmoving operator"),
+        "painter" to listOf("commercial painter", "industrial painter", "painting"),
+        "maintenance technician" to listOf("maintenance worker", "property maintenance", "handyperson"),
+        "truck driver" to listOf("class 2 driver", "class 4 driver", "class 5 driver", "heavy vehicle driver"),
+        "logistics assistant" to listOf("freight handler", "dispatch assistant", "transport worker"),
+        "traffic controller" to listOf("traffic management worker", "stop go operator"),
+        "scaffolder" to listOf("scaffolding labourer", "scaffolding")
     )
 
     private val positiveSignals = listOf(
@@ -37,6 +47,7 @@ class JobMatcher {
             .filter { it.isNotBlank() && text.contains(it) }.distinct()
 
         val sponsorship = detectSponsorship(text)
+        val countryAssessment = CountryJobPolicy().assess(job.country, job.title, job.description)
         var score = 20
         val reasons = mutableListOf<String>()
 
@@ -64,8 +75,10 @@ class JobMatcher {
             }
             SponsorshipSignal.NOT_MENTIONED -> Unit
         }
+        countryAssessment.evidence.forEach { reasons += "Country policy evidence: $it" }
+        reasons += countryAssessment.disclaimer
         reasons += "Relevance estimate only; not a hiring, work-rights or visa eligibility decision"
-        return JobMatch(job.id, score.coerceIn(0, 100), sponsorship, reasons)
+        return JobMatch(job.id, score.coerceIn(0, 100), sponsorship, reasons, countryAssessment)
     }
 
     fun detectSponsorship(text: String): SponsorshipSignal {

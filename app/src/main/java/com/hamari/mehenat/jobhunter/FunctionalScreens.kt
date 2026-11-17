@@ -21,11 +21,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hamari.mehenat.jobhunter.data.EncryptedDocumentVault
+import com.hamari.mehenat.jobhunter.data.ApplicationPdfGenerator
 import com.hamari.mehenat.jobhunter.data.DocumentTextExtractor
 import com.hamari.mehenat.jobhunter.data.JobDiscoveryRepository
+import com.hamari.mehenat.jobhunter.data.AdzunaCredentialsStore
 import com.hamari.mehenat.jobhunter.data.JobSourceClient
 import com.hamari.mehenat.jobhunter.data.LocalProfileStore
 import com.hamari.mehenat.jobhunter.data.LocalModelManager
@@ -39,9 +43,16 @@ import com.hamari.mehenat.jobhunter.data.InterviewReminderScheduler
 import com.hamari.mehenat.jobhunter.data.OfficialVisaSources
 import com.hamari.mehenat.jobhunter.data.OfficialVisaResearchClient
 import com.hamari.mehenat.jobhunter.data.VisaResearchResult
+import com.hamari.mehenat.jobhunter.data.NzEmployerVerificationClient
+import com.hamari.mehenat.jobhunter.data.NzEmployerLookupResult
+import com.hamari.mehenat.jobhunter.data.NzEmployerLookupStatus
+import com.hamari.mehenat.jobhunter.domain.EmploymentContractAnalyzer
+import com.hamari.mehenat.jobhunter.domain.EmploymentContractReport
+import com.hamari.mehenat.jobhunter.domain.ContractFindingSeverity
 import com.hamari.mehenat.jobhunter.domain.JobListing
 import com.hamari.mehenat.jobhunter.domain.JobMatcher
 import com.hamari.mehenat.jobhunter.domain.JobProfile
+import com.hamari.mehenat.jobhunter.domain.JobFreshnessService
 import com.hamari.mehenat.jobhunter.domain.SponsorshipSignal
 import org.json.JSONArray
 import kotlinx.coroutines.Dispatchers
@@ -52,16 +63,27 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
-private val ScreenGold = Color(0xFFD6B36A)
-private val ScreenMuted = Color(0xFF9AA4B2)
-private val ScreenPanel = Color(0xFF191F27)
+private val ScreenGold = FieldbookPalette.Rust
+private val ScreenMuted = FieldbookPalette.Muted
+private val ScreenPanel = FieldbookPalette.Paper
+
+private inline fun <T> withTrackerStore(context: Context, action: (ApplicationTrackerStore) -> T): T {
+    val store = ApplicationTrackerStore(context)
+    return try { action(store) } finally { store.close() }
+}
+
+private inline fun <T> withInterviewStore(context: Context, action: (InterviewStore) -> T): T {
+    val store = InterviewStore(context)
+    return try { action(store) } finally { store.close() }
+}
 
 @Composable
 fun JobsScreen(context: Context) {
     var query by remember { mutableStateOf("mechanic") }
-    var countries by remember { mutableStateOf("Australia, United Kingdom, Germany") }
-    var greenhouseBoards by remember { mutableStateOf("") }
-    var leverSites by remember { mutableStateOf("") }
+    var countries by remember { mutableStateOf("New Zealand, Australia, United Kingdom") }
+    val connectorPreferences = remember(context) { com.hamari.mehenat.jobhunter.data.ConnectorPreferences(context) }
+    var greenhouseBoards by remember(context) { mutableStateOf(connectorPreferences.greenhouseBoards()) }
+    var leverSites by remember(context) { mutableStateOf(connectorPreferences.leverSites()) }
     var results by remember { mutableStateOf<List<JobListing>>(emptyList()) }
     var status by remember { mutableStateOf("Search permitted public job feeds. Results include the original source link.") }
     var visaCountry by remember { mutableStateOf("Australia") }
@@ -73,12 +95,20 @@ fun JobsScreen(context: Context) {
     val scope = rememberCoroutineScope()
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Job discovery", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+        Text("OPPORTUNITY SEARCH", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text("Find your next role", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
         Text("Public feeds only. No LinkedIn/Indeed login scraping or access-control bypass. Remotive listings are delayed 24 hours and its free API is capped at 4 calls/day; always verify the employer's live listing.", color = ScreenMuted, fontSize = 12.sp)
         OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Role / keywords") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(value = countries, onValueChange = { countries = it }, label = { Text("Target countries (comma separated)") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = greenhouseBoards, onValueChange = { greenhouseBoards = it }, label = { Text("Optional Greenhouse company board IDs") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = leverSites, onValueChange = { leverSites = it }, label = { Text("Optional Lever company site names") }, modifier = Modifier.fillMaxWidth())
+        ConnectorHub(
+            context = context,
+            greenhouseBoards = greenhouseBoards,
+            onGreenhouseBoardsChange = { greenhouseBoards = it; connectorPreferences.saveGreenhouseBoards(it) },
+            leverSites = leverSites,
+            onLeverSitesChange = { leverSites = it; connectorPreferences.saveLeverSites(it) }
+        )
         Button(
             onClick = {
                 if (query.isBlank() || countries.isBlank()) {
@@ -87,23 +117,35 @@ fun JobsScreen(context: Context) {
                     loading = true
                     status = "Connecting to public job APIs…"
                     scope.launch {
-                        val countryList = countries.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                        val sourceResults = withContext(Dispatchers.IO) {
-                            JobDiscoveryRepository(context).search(
-                                query = query,
-                                countries = countryList,
-                                greenhouseBoards = greenhouseBoards.split(",").map { it.trim() }.filter { it.isNotBlank() },
-                                leverSites = leverSites.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                            )
+                        try {
+                            val searchQuery = query.trim()
+                            val countryList = countries.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                            require(countryList.isNotEmpty()) { "Enter at least one target country." }
+                            val greenhouseBoardList = greenhouseBoards.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                            val leverSiteList = leverSites.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                            val sourceResults = withContext(Dispatchers.IO) {
+                                JobDiscoveryRepository(context).search(
+                                    query = searchQuery,
+                                    countries = countryList,
+                                    greenhouseBoards = greenhouseBoardList,
+                                    leverSites = leverSiteList,
+                                    adzunaCredentials = AdzunaCredentialsStore(context).load(),
+                                    enabledProviderIds = com.hamari.mehenat.jobhunter.data.ConnectorPreferences(context).enabledIds()
+                                )
+                            }
+                            val freshResults = JobFreshnessService.removeExpired(sourceResults.flatMap { it.jobs })
+                            results = freshResults
+                            val failures = sourceResults.filter { it.error != null }.joinToString { "${it.source}: ${it.error}" }
+                            status = if (failures.isBlank()) {
+                                "Search completed. ${freshResults.size} vacancies retrieved from ${sourceResults.size} enabled sources."
+                            } else {
+                                "Partial results. Source errors: $failures"
+                            }
+                        } catch (error: Exception) {
+                            status = "Job search failed: ${error.message ?: error.javaClass.simpleName}. Your previous results were kept."
+                        } finally {
+                            loading = false
                         }
-                        results = sourceResults.flatMap { it.jobs }.distinctBy { it.id }
-                        val failures = sourceResults.filter { it.error != null }.joinToString { "${it.source}: ${it.error}" }
-                        status = if (failures.isBlank()) {
-                            "Search completed. ${results.size} vacancies retrieved from ${sourceResults.size} public sources."
-                        } else {
-                            "Partial results. Source errors: $failures"
-                        }
-                        loading = false
                     }
                 }
             },
@@ -148,7 +190,7 @@ fun JobsScreen(context: Context) {
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = ScreenPanel),
-                border = BorderStroke(1.dp, Color(0xFF303945))
+                border = BorderStroke(1.dp, FieldbookPalette.Rule)
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(job.title, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
@@ -200,7 +242,7 @@ fun JobsScreen(context: Context) {
                             }) { Text("Himalayas source") }
                         }
                         Button(onClick = {
-                            val saved = ApplicationTrackerStore(context).save(job)
+                            val saved = withTrackerStore(context) { it.save(job) }
                             status = if (saved) "Vacancy saved to your local tracker." else "This vacancy is already saved."
                         }) { Text("Save job") }
                         OutlinedButton(onClick = {
@@ -211,7 +253,7 @@ fun JobsScreen(context: Context) {
                 }
             }
         }
-        Divider(color = Color(0xFF303945))
+        HorizontalDivider(color = FieldbookPalette.Rule)
         Text("OFFICIAL VISA RESEARCH", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         OutlinedTextField(value = visaCountry, onValueChange = { visaCountry = it }, label = { Text("Country") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Button(
@@ -223,25 +265,32 @@ fun JobsScreen(context: Context) {
                     visaLoading = true
                     visaStatus = "Fetching official government pages…"
                     scope.launch {
-                        val selected = OfficialVisaSources.sources.filter { it.country.equals(visaCountry.trim(), true) }
-                        val fetched = withContext(Dispatchers.IO) {
-                            selected.map { OfficialVisaResearchClient().fetch(it) }
+                        try {
+                            val countrySnapshot = visaCountry.trim()
+                            val selected = OfficialVisaSources.sources.filter { it.country.equals(countrySnapshot, true) }
+                            val fetched = withContext(Dispatchers.IO) {
+                                selected.map { OfficialVisaResearchClient().fetch(it) }
+                            }
+                            visaResults = fetched
+                            val evidence = fetched.filter { it.error == null && it.text.isNotBlank() }.joinToString("\\n\\n") {
+                                "SOURCE: ${it.source.country} — ${it.source.title}\\nURL: ${it.source.url}\\nRetrieved: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it.retrievedAtEpochMs))}\\nEXCERPT: ${it.text}"
+                            }
+                            if (evidence.isNotBlank()) {
+                                val profileStore = LocalProfileStore(context)
+                                val profile = profileStore.loadForUpdate()
+                                profile.put("official_visa_evidence", evidence.take(40000))
+                                profileStore.save(profile.toString())
+                            }
+                            visaStatus = if (fetched.isEmpty()) {
+                                "No official sources are registered for this country yet."
+                            } else {
+                                "Fetched ${fetched.count { it.error == null }} of ${fetched.size} registered official pages. Evidence is stored locally."
+                            }
+                        } catch (error: Exception) {
+                            visaStatus = "Official visa research failed: ${error.message ?: error.javaClass.simpleName}. Previous evidence was kept."
+                        } finally {
+                            visaLoading = false
                         }
-                        visaResults = fetched
-                        val evidence = fetched.filter { it.error == null && it.text.isNotBlank() }.joinToString("\\n\\n") {
-                            "SOURCE: ${it.source.country} — ${it.source.title}\\nURL: ${it.source.url}\\nRetrieved: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it.retrievedAtEpochMs))}\\nEXCERPT: ${it.text}"
-                        }
-                        if (evidence.isNotBlank()) {
-                            val profile = LocalProfileStore(context).load() ?: org.json.JSONObject()
-                            profile.put("official_visa_evidence", evidence.take(40000))
-                            LocalProfileStore(context).save(profile.toString())
-                        }
-                        visaStatus = if (fetched.isEmpty()) {
-                            "No official sources are registered for this country yet."
-                        } else {
-                            "Fetched ${fetched.count { it.error == null }} of ${fetched.size} registered official pages. Evidence is stored locally."
-                        }
-                        visaLoading = false
                     }
                 }
             },
@@ -265,7 +314,7 @@ fun JobsScreen(context: Context) {
                 }
             }
         }
-        Divider(color = Color(0xFF303945))
+        HorizontalDivider(color = FieldbookPalette.Rule)
         Text("OFFICIAL VISA & SPONSORSHIP SOURCES", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         Text("Government sources only • links last checked 5 Nov 2026. Always open the current source; this app does not decide visa eligibility.", color = ScreenMuted, fontSize = 11.sp)
         OfficialVisaSources.sources.forEach { source ->
@@ -281,6 +330,184 @@ fun JobsScreen(context: Context) {
                 }
             }
         }
+        HorizontalDivider(color = FieldbookPalette.Rule)
+        NzVerificationPanel(context)
+    }
+}
+
+@Composable
+private fun NzVerificationPanel(context: Context) {
+    var employerQuery by remember { mutableStateOf("") }
+    var employerResult by remember { mutableStateOf<NzEmployerLookupResult?>(null) }
+    var employerLoading by remember { mutableStateOf(false) }
+    var contractText by remember { mutableStateOf("") }
+    var expectedEmployer by remember { mutableStateOf("") }
+    var expectedRole by remember { mutableStateOf("") }
+    var expectedLocation by remember { mutableStateOf("") }
+    var advertisedHourlyPay by remember { mutableStateOf("") }
+    var contractReport by remember { mutableStateOf<EmploymentContractReport?>(null) }
+    val scope = rememberCoroutineScope()
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("NEW ZEALAND — EMPLOYER & CONTRACT CHECK", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(
+            "Search Immigration New Zealand's public accredited-employer register. An employer accreditation match does not prove that a specific vacancy has an approved job check.",
+            color = ScreenMuted, fontSize = 11.sp
+        )
+        OutlinedTextField(
+            value = employerQuery,
+            onValueChange = { employerQuery = it; employerResult = null },
+            label = { Text("Employer legal name or 13-digit NZBN") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        Button(
+            onClick = {
+                employerLoading = true
+                employerResult = null
+                scope.launch {
+                    employerResult = withContext(Dispatchers.IO) {
+                        NzEmployerVerificationClient().lookup(employerQuery)
+                    }
+                    employerLoading = false
+                }
+            },
+            enabled = !employerLoading && employerQuery.trim().length >= 3,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (employerLoading) "Checking INZ register…" else "Check employer accreditation") }
+
+        employerResult?.let { result ->
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ScreenPanel)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text(
+                        when (result.status) {
+                            NzEmployerLookupStatus.ACCREDITED_NZBN_MATCH -> "Exact NZBN match — accreditation listed"
+                            NzEmployerLookupStatus.EXPIRED_NZBN_MATCH -> "NZBN match — published accreditation expired"
+                            NzEmployerLookupStatus.EXACT_NZBN_MATCH_EXPIRY_UNKNOWN -> "NZBN match — expiry date unavailable"
+                            NzEmployerLookupStatus.EXACT_NAME_MATCH_REQUIRES_NZBN_CONFIRMATION -> "Employer name result — confirm NZBN"
+                            NzEmployerLookupStatus.NO_PUBLIC_MATCH_INCONCLUSIVE -> "No public match — inconclusive"
+                            NzEmployerLookupStatus.LOOKUP_FAILED -> "Lookup unavailable"
+                        },
+                        color = if (result.status == NzEmployerLookupStatus.ACCREDITED_NZBN_MATCH) ScreenGold else ScreenMuted,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    )
+                    Text(result.message, color = ScreenMuted, fontSize = 11.sp)
+                    result.employers.forEach { employer ->
+                        Text(employer.legalName, color = Color.White, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                        employer.tradingName?.let { Text("Trading name: $it", color = ScreenMuted, fontSize = 11.sp) }
+                        Text("NZBN: ${employer.nzbn ?: "Not returned"}", color = ScreenMuted, fontSize = 11.sp)
+                        Text("Accreditation expiry: ${employer.accreditationExpiryDate ?: "Not returned"}", color = ScreenMuted, fontSize = 11.sp)
+                    }
+                    Text("Checked: ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date(result.checkedAtEpochMs))}", color = ScreenMuted, fontSize = 10.sp)
+                    TextButton(onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(result.sourceUrl)))
+                    }) { Text("Open official INZ employer register") }
+                    result.error?.let { Text("Technical detail: $it", color = ScreenMuted, fontSize = 10.sp) }
+                }
+            }
+        }
+
+        Text("SPECIFIC JOB CHECK", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text(
+            "INZ does not provide a public worker-facing lookup for a job-check approval by vacancy. This app will not invent a verified result. Ask the employer for the job-check approval details and compare the role, location, pay and conditions with the signed offer.",
+            color = ScreenMuted, fontSize = 11.sp
+        )
+        OutlinedButton(
+            onClick = {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.immigration.govt.nz/work/for-employers/getting-accreditation-or-approval-to-hire/employer-accreditation-for-the-aewv/aewv-employer-accreditation-and-job-check-process/")))
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Open INZ job-check process") }
+
+        HorizontalDivider(color = FieldbookPalette.Rule)
+        Text("EMPLOYMENT AGREEMENT TEXT REVIEW", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text("Paste readable contract text below. This first-pass checklist flags missing terms and risk wording; it is not legal advice.", color = ScreenMuted, fontSize = 11.sp)
+        OutlinedTextField(
+            value = expectedEmployer,
+            onValueChange = { expectedEmployer = it; contractReport = null },
+            label = { Text("Expected employer legal name (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = expectedRole,
+            onValueChange = { expectedRole = it; contractReport = null },
+            label = { Text("Expected job title (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = expectedLocation,
+            onValueChange = { expectedLocation = it; contractReport = null },
+            label = { Text("Expected work location (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = advertisedHourlyPay,
+            onValueChange = { advertisedHourlyPay = it; contractReport = null },
+            label = { Text("Advertised hourly pay in NZD (optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+        OutlinedTextField(
+            value = contractText,
+            onValueChange = { contractText = it; contractReport = null },
+            label = { Text("Paste employment agreement text") },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 5
+        )
+        Button(
+            onClick = {
+                contractReport = EmploymentContractAnalyzer().analyze(
+                    contractText = contractText,
+                    expectedEmployerName = expectedEmployer.takeIf(String::isNotBlank),
+                    expectedJobTitle = expectedRole.takeIf(String::isNotBlank),
+                    expectedWorkLocation = expectedLocation.takeIf(String::isNotBlank),
+                    advertisedHourlyPayNzd = advertisedHourlyPay.toDoubleOrNull()
+                )
+            },
+            enabled = contractText.isNotBlank(),
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Analyze agreement") }
+
+        contractReport?.let { report ->
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ScreenPanel)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(report.summary, color = if (report.hasHighRiskFlags) FieldbookPalette.Danger else ScreenGold, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Text(
+                        "Detected hours: ${report.detectedWeeklyHours?.let { "$it/week" } ?: "Not detected"} • Hourly pay: ${report.detectedHourlyPayNzd?.let { "NZD $it" } ?: "Not detected"}",
+                        color = ScreenMuted, fontSize = 11.sp
+                    )
+                    report.findings.forEach { finding ->
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                "${if (finding.severity == ContractFindingSeverity.HIGH_RISK) "⚠ " else "• "}${finding.title}",
+                                color = if (finding.severity == ContractFindingSeverity.HIGH_RISK) FieldbookPalette.Danger else ScreenGold,
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
+                            Text(finding.detail, color = ScreenMuted, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        Text("NEW ZEALAND JOB PORTALS", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Text("These links open the source websites. Search results from permitted public feeds are separate; browser hand-off is used where no authorized job-search API is available.", color = ScreenMuted, fontSize = 11.sp)
+        listOf(
+            "SEEK New Zealand" to "https://www.seek.co.nz/",
+            "Tradestaff" to "https://www.tradestaff.co.nz/",
+            "Trade Assist" to "https://tradeassist.net/",
+            "Enterprise Recruitment" to "https://www.enterprise.co.nz/"
+        ).forEach { (label, url) ->
+            OutlinedButton(
+                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Open $label") }
+        }
     }
 }
 
@@ -289,6 +516,15 @@ fun FilesScreen(context: Context) {
     var message by remember { mutableStateOf("Documents are encrypted with an Android Keystore AES-GCM key and kept in app-private storage.") }
     var documentIds by remember { mutableStateOf(EncryptedDocumentVault(context).listIds()) }
     var cvPreview by remember { mutableStateOf("") }
+    var extractedText by remember { mutableStateOf("") }
+    var extractedFileName by remember { mutableStateOf("") }
+    var extractedDocumentId by remember { mutableStateOf("") }
+    var pendingDeleteDocumentId by remember { mutableStateOf<String?>(null) }
+    var extractedContractReport by remember { mutableStateOf<EmploymentContractReport?>(null) }
+    var expectedContractEmployer by remember { mutableStateOf("") }
+    var expectedContractRole by remember { mutableStateOf("") }
+    var expectedContractLocation by remember { mutableStateOf("") }
+    var expectedContractPay by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -311,8 +547,57 @@ fun FilesScreen(context: Context) {
         }
     }
 
+    if (pendingDeleteDocumentId != null) {
+        AlertDialog(
+            onDismissRequest = { pendingDeleteDocumentId = null },
+            title = { Text("Delete this document?") },
+            text = { Text("The encrypted source file will be removed from app storage. Extracted CV/document text linked to this file will also be cleared from the encrypted profile when that profile can be decrypted.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = pendingDeleteDocumentId ?: return@TextButton
+                    pendingDeleteDocumentId = null
+                    scope.launch {
+                        message = "Deleting encrypted document and linked extracted text…"
+                        try {
+                            val result = withContext(Dispatchers.IO) {
+                                val removed = EncryptedDocumentVault(context).delete(id)
+                                if (!removed) {
+                                    false to true
+                                } else {
+                                    var profileCleanupSucceeded = true
+                                    if (!LocalProfileStore(context).clearExtractedDocumentText(id)) {
+                                        profileCleanupSucceeded = false
+                                    }
+
+                                    true to profileCleanupSucceeded
+                                }
+                            }
+                            documentIds = withContext(Dispatchers.IO) { EncryptedDocumentVault(context).listIds() }
+                            if (extractedDocumentId == id) {
+                                extractedDocumentId = ""
+                                extractedText = ""
+                                extractedFileName = ""
+                                extractedContractReport = null
+                                cvPreview = ""
+                            }
+                            message = when {
+                                !result.first -> "Document was not found."
+                                result.second -> "Encrypted document and its linked extracted profile text were deleted."
+                                else -> "Document file deleted, but linked profile cleanup could not be verified. Review your local profile before sharing it."
+                            }
+                        } catch (error: Exception) {
+                            message = "Delete failed: ${error.message ?: error.javaClass.simpleName}"
+                        }
+                    }
+                }) { Text("Delete document") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDeleteDocumentId = null }) { Text("Keep document") } }
+        )
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Private document vault", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+        Text("DOCUMENT ARCHIVE", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text("Your private vault", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
         Text("CVs, certificates, licenses and identity documents stay on this phone. Files are encrypted before writing to app storage.", color = ScreenMuted, fontSize = 12.sp)
         Button(onClick = {
             picker.launch(arrayOf("application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "image/*"))
@@ -327,25 +612,30 @@ fun FilesScreen(context: Context) {
                         TextButton(onClick = {
                             scope.launch {
                                 try {
-                                    val extracted = withContext(Dispatchers.IO) {
+                                    val (stored, extracted) = withContext(Dispatchers.IO) {
                                         val stored = EncryptedDocumentVault(context).readDocument(id)
-                                        DocumentTextExtractor(context).extract(stored.document.originalName, stored.bytes)
+                                        val extracted = DocumentTextExtractor(context).extract(stored.document.originalName, stored.bytes)
+                                        stored to extracted
                                     }
-                                    val profile = LocalProfileStore(context).load() ?: org.json.JSONObject()
-                                    profile.put("cv_text", extracted.text)
+                                    val profile = LocalProfileStore(context).loadForUpdate()
+                                    val isCv = stored.document.originalName.contains(Regex("(?i)(cv|resume)"))
+                                    val textKey = if (isCv) "cv_text" else "last_document_text"
+                                    val sourceKey = if (isCv) "cv_document_id" else "last_document_id"
+                                    profile.put(textKey, extracted.text)
+                                    profile.put(sourceKey, id)
                                     LocalProfileStore(context).save(profile.toString())
+                                    extractedText = extracted.text
+                                    extractedFileName = stored.document.originalName
+                                    extractedDocumentId = id
+                                    extractedContractReport = null
                                     cvPreview = extracted.text.take(2200)
-                                    message = "Extracted ${extracted.text.length} characters from ${extracted.format} and saved the CV text encrypted in your profile."
+                                    message = "Extracted ${extracted.text.length} characters from ${extracted.format} and saved the extracted text encrypted in your profile." + (extracted.warning?.let { " Note: $it" } ?: "")
                                 } catch (e: Exception) {
                                     message = "Text extraction failed: ${e.message ?: e.javaClass.simpleName}"
                                 }
                             }
-                        }) { Text("Extract CV text") }
-                        TextButton(onClick = {
-                            val deleted = EncryptedDocumentVault(context).delete(id)
-                            documentIds = EncryptedDocumentVault(context).listIds()
-                            message = if (deleted) "Encrypted document deleted." else "Document was not found."
-                        }) { Text("Delete") }
+                        }) { Text("Extract text") }
+                        TextButton(onClick = { pendingDeleteDocumentId = id }) { Text("Delete") }
                     }
                 }
             }
@@ -353,6 +643,64 @@ fun FilesScreen(context: Context) {
         if (cvPreview.isNotBlank()) {
             Text("CV text preview", color = ScreenGold, fontWeight = FontWeight.SemiBold)
             Text(cvPreview, color = ScreenMuted, fontSize = 11.sp)
+            if (extractedText.isNotBlank()) {
+                Text("Extracted from: $extractedFileName", color = ScreenMuted, fontSize = 10.sp)
+                Text("Optional vacancy cross-checks", color = ScreenGold, fontWeight = FontWeight.SemiBold)
+                OutlinedTextField(
+                    value = expectedContractEmployer,
+                    onValueChange = { expectedContractEmployer = it; extractedContractReport = null },
+                    label = { Text("Expected employer legal name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = expectedContractRole,
+                    onValueChange = { expectedContractRole = it; extractedContractReport = null },
+                    label = { Text("Expected job title") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = expectedContractLocation,
+                    onValueChange = { expectedContractLocation = it; extractedContractReport = null },
+                    label = { Text("Expected work location") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = expectedContractPay,
+                    onValueChange = { expectedContractPay = it; extractedContractReport = null },
+                    label = { Text("Advertised hourly pay (NZD)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Button(
+                    onClick = {
+                        extractedContractReport = EmploymentContractAnalyzer().analyze(
+                            contractText = extractedText,
+                            expectedEmployerName = expectedContractEmployer.takeIf(String::isNotBlank),
+                            expectedJobTitle = expectedContractRole.takeIf(String::isNotBlank),
+                            expectedWorkLocation = expectedContractLocation.takeIf(String::isNotBlank),
+                            advertisedHourlyPayNzd = expectedContractPay.toDoubleOrNull()
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Review agreement and cross-check vacancy") }
+                extractedContractReport?.let { report ->
+                    Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Text(report.summary, color = if (report.hasHighRiskFlags) FieldbookPalette.Danger else ScreenGold, fontWeight = FontWeight.SemiBold)
+                            report.findings.forEach { finding ->
+                                Text(
+                                    "${finding.title}: ${finding.detail}",
+                                    color = if (finding.severity == ContractFindingSeverity.HIGH_RISK) FieldbookPalette.Danger else ScreenMuted,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -360,8 +708,10 @@ fun FilesScreen(context: Context) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TrackerScreen(context: Context) {
-    var entries by remember { mutableStateOf(ApplicationTrackerStore(context).all()) }
-    var interviews by remember { mutableStateOf(InterviewStore(context).all()) }
+    var entries by remember(context) { mutableStateOf(withTrackerStore(context) { it.all() }) }
+    var interviews by remember(context) { mutableStateOf(withInterviewStore(context) { it.all() }) }
+    var pendingDeleteInterview by remember { mutableStateOf<InterviewRecord?>(null) }
+    val scope = rememberCoroutineScope()
     var company by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("") }
     var dateTime by remember {
@@ -375,7 +725,8 @@ fun TrackerScreen(context: Context) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Application tracker", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+        Text("APPLICATION JOURNAL", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text("Keep every move in view", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
         Text("Saved jobs are stored locally. Change each stage as you progress.", color = ScreenMuted, fontSize = 12.sp)
         if (entries.isEmpty()) Text("No saved vacancies yet. Save a job from the Jobs tab.", color = ScreenMuted)
         entries.forEach { item ->
@@ -393,21 +744,25 @@ fun TrackerScreen(context: Context) {
                         minLines = 2
                     )
                     TextButton(onClick = {
-                        ApplicationTrackerStore(context).updateNotes(item.id, notes)
-                        entries = ApplicationTrackerStore(context).all()
+                        entries = withTrackerStore(context) { store ->
+                            store.updateNotes(item.id, notes)
+                            store.all()
+                        }
                     }) { Text("Save notes") }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         listOf("Saved", "Contacted", "Awaiting response", "Applied", "Interview", "Offer", "Rejected").forEach { stage ->
                             TextButton(onClick = {
-                                ApplicationTrackerStore(context).setStage(item.id, stage)
-                                entries = ApplicationTrackerStore(context).all()
+                                entries = withTrackerStore(context) { store ->
+                                    store.setStage(item.id, stage)
+                                    store.all()
+                                }
                             }) { Text(stage, fontSize = 9.sp) }
                         }
                     }
                 }
             }
         }
-        Divider(color = Color(0xFF303945))
+        HorizontalDivider(color = FieldbookPalette.Rule)
         Text("INTERVIEW PLANNER", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
         OutlinedTextField(value = company, onValueChange = { company = it }, label = { Text("Company") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         OutlinedTextField(value = role, onValueChange = { role = it }, label = { Text("Role") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
@@ -428,9 +783,19 @@ fun TrackerScreen(context: Context) {
                     locationOrLink = location.trim(),
                     notes = ""
                 )
-                InterviewReminderScheduler.schedule(context, interview)
-                InterviewStore(context).save(interview)
-                interviews = InterviewStore(context).all()
+                val store = InterviewStore(context)
+                try {
+                    check(store.save(interview)) { "The interview could not be stored." }
+                    try {
+                        InterviewReminderScheduler.schedule(context, interview)
+                    } catch (scheduleError: Exception) {
+                        store.delete(interview.id)
+                        throw scheduleError
+                    }
+                    interviews = store.all()
+                } finally {
+                    store.close()
+                }
                 interviewMessage = "Interview saved. A local reminder is scheduled for one hour before."
                 if (Build.VERSION.SDK_INT >= 33) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 company = ""
@@ -441,14 +806,43 @@ fun TrackerScreen(context: Context) {
             }
         }, modifier = Modifier.fillMaxWidth()) { Text("Save interview and reminder") }
         Text(interviewMessage, color = ScreenMuted, fontSize = 12.sp)
+        if (interviews.isEmpty()) Text("No interviews scheduled yet.", color = ScreenMuted)
         interviews.forEach { interview ->
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ScreenPanel)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("${interview.role} • ${interview.company}", fontWeight = FontWeight.SemiBold)
                     Text(java.text.DateFormat.getDateTimeInstance().format(java.util.Date(interview.scheduledAtEpochMs)) + " • " + interview.timeZoneId, color = ScreenMuted, fontSize = 11.sp)
                     if (interview.locationOrLink.isNotBlank()) Text(interview.locationOrLink, color = ScreenMuted, fontSize = 11.sp)
+                    TextButton(onClick = { pendingDeleteInterview = interview }) { Text("Delete interview and reminder") }
                 }
             }
+        }
+        pendingDeleteInterview?.let { selected ->
+            AlertDialog(
+                onDismissRequest = { pendingDeleteInterview = null },
+                title = { Text("Delete interview and reminder?") },
+                text = { Text("Remove the saved interview for ${selected.role} at ${selected.company} and cancel its pending reminder?") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pendingDeleteInterview = null
+                        scope.launch {
+                            try {
+                                val deleted = withContext(Dispatchers.IO) {
+                                    InterviewReminderScheduler.cancel(context, selected.id)
+                                    val store = InterviewStore(context)
+                                    try { store.delete(selected.id) } finally { store.close() }
+                                }
+                                val store = InterviewStore(context)
+                                interviews = try { store.all() } finally { store.close() }
+                                interviewMessage = if (deleted) "Interview and pending reminder deleted." else "Interview record was not found."
+                            } catch (error: Exception) {
+                                interviewMessage = "Could not delete interview: ${error.message ?: error.javaClass.simpleName}"
+                            }
+                        }
+                    }) { Text("Delete") }
+                },
+                dismissButton = { TextButton(onClick = { pendingDeleteInterview = null }) { Text("Keep") } }
+            )
         }
     }
 }
@@ -464,14 +858,37 @@ fun LocalAiScreen(context: Context) {
     var agentEvidence by remember { mutableStateOf("") }
     var employerEmail by remember { mutableStateOf("") }
     var agentOutput by remember { mutableStateOf("") }
+    var pdfDraftToExport by remember { mutableStateOf("") }
+    var pdfExportTitle by remember { mutableStateOf("Application draft") }
+    var pdfExportStatus by remember { mutableStateOf("") }
     var selectedAgent by remember { mutableStateOf(PersonalAgent.CV_ANALYST) }
     var agentMenuOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val manager = remember(context) { LocalModelManager(context) }
+    val pdfExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri == null) {
+            pdfExportStatus = "PDF export cancelled."
+        } else {
+            val draft = pdfDraftToExport
+            val title = pdfExportTitle
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        ApplicationPdfGenerator.write(context, uri, title, draft)
+                    }
+                    pdfExportStatus = "PDF saved to the destination you selected. Review it before sending."
+                } catch (e: Exception) {
+                    pdfExportStatus = "PDF export failed: ${e.message ?: e.javaClass.simpleName}"
+                }
+            }
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("On-device AI", fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
-        Text("Local model runtime is the required V1 path. No cloud AI provider will receive your CV.", color = ScreenMuted, fontSize = 12.sp)
-        Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
+        Text("YOUR CAREER WORKSHOP", color = ScreenGold, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text("AI CV & application studio", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Serif, color = FieldbookPalette.Ink)
+        Text("A calm, private space to prepare thoughtful job documents. Your CV and application details stay on this phone while the local model works.", color = ScreenMuted, fontSize = 12.sp)
+        CvApplicationStudio(context)
+Card(colors = CardDefaults.cardColors(containerColor = ScreenPanel), modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("LFM2.5 1.2B — QAD Q4_0", color = ScreenGold, fontWeight = FontWeight.SemiBold)
                 Text("Teacher-distilled quantization-aware checkpoint • about 696 MB • Hugging Face • free LFM Open License (terms apply). The model is downloaded to private app storage and SHA-256 verified before loading.", color = ScreenMuted, fontSize = 12.sp)
@@ -523,7 +940,7 @@ fun LocalAiScreen(context: Context) {
                     Text("Local inference test", color = ScreenGold, fontWeight = FontWeight.SemiBold)
                     Text(response, color = ScreenMuted, fontSize = 13.sp)
                 }
-                Divider(color = Color(0xFF303945))
+                HorizontalDivider(color = FieldbookPalette.Rule)
                 Text("LOCAL SPECIALIST AGENTS", color = ScreenGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 Box {
                     OutlinedButton(onClick = { agentMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
@@ -570,7 +987,7 @@ fun LocalAiScreen(context: Context) {
                             try {
                                 val profile = LocalProfileStore(context).load()
                                 val profileFacts = org.json.JSONObject().apply {
-                                    listOf("full_name", "email", "phone", "target_roles", "target_countries", "skills", "experience_summary").forEach { key ->
+                                    listOf("full_name", "email", "phone", "target_roles", "target_countries", "skills", "experience_summary", "education_summary", "work_history", "certifications", "languages").forEach { key ->
                                         if (profile?.has(key) == true) put(key, profile.opt(key))
                                     }
                                 }.toString()
@@ -635,6 +1052,22 @@ fun LocalAiScreen(context: Context) {
                                 }
                             }) { Text("Open email draft") }
                         }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            pdfDraftToExport = agentOutput
+                            pdfExportTitle = when (selectedAgent) {
+                                PersonalAgent.CV_TAILOR -> "Tailored CV"
+                                PersonalAgent.COVER_LETTER -> "Cover Letter"
+                                else -> "Application Draft"
+                            }
+                            val safeName = pdfExportTitle.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
+                            pdfExporter.launch("${safeName.ifBlank { "application_draft" }}.pdf")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Export reviewed draft as PDF") }
+                    if (pdfExportStatus.isNotBlank()) {
+                        Text(pdfExportStatus, color = ScreenMuted, fontSize = 11.sp)
                     }
                 }
                 TextButton(onClick = {

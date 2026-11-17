@@ -4,6 +4,7 @@ import com.hamari.mehenat.jobhunter.domain.JobListing
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.ResponseBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -22,7 +23,8 @@ class JobSourceClient(
     private val leverBaseUrl: String = "https://api.lever.co/v0/postings",
     private val himalayasBaseUrl: String = "https://himalayas.app/jobs/api/search",
     private val himalayasVerificationBaseUrl: String = "https://himalayas.app/jobs/api/companies",
-    private val jobicyBaseUrl: String = "https://jobicy.com/api/v2/remote-jobs"
+    private val jobicyBaseUrl: String = "https://jobicy.com/api/v2/remote-jobs",
+    private val adzunaBaseUrl: String = "https://api.adzuna.com/v1/api"
 ) {
     fun searchArbeitnow(query: String, countries: List<String>, maxPages: Int = 3): SourceResult {
         val found = mutableListOf<JobListing>()
@@ -38,7 +40,7 @@ class JobSourceClient(
                     val location = item.optString("location")
                     val country = countryFromLocation(location, countries)
                     val description = item.optString("description")
-                    if (country != null && matches(query, "$title $description") && item.optString("url").startsWith("http")) {
+                    if (country != null && matches(query, "$title $description") && isSafeHttpsUrl(item.optString("url"))) {
                         found += JobListing(
                             id = stableId("Arbeitnow", item.optString("url")),
                             title = title.ifBlank { "Untitled" },
@@ -72,7 +74,7 @@ class JobSourceClient(
                 val country = countryFromLocation(location, countries)
                 val remoteWorldwide = location.contains("worldwide", true) || location.equals("anywhere", true)
                 val url = item.optString("url")
-                if ((!remoteWorldwide && country == null) || !url.startsWith("http")) return@mapNotNull null
+                if ((!remoteWorldwide && country == null) || !isSafeHttpsUrl(url)) return@mapNotNull null
                 JobListing(
                     id = stableId("Remotive", url), title = title, company = item.optString("company_name"),
                     location = location, country = country ?: "Remote",
@@ -118,7 +120,7 @@ class JobSourceClient(
                 val expiry = item.optLong("expiryDate", Long.MAX_VALUE)
                 if (expiry > 0L && expiry != Long.MAX_VALUE && expiry <= System.currentTimeMillis() / 1000L) return@mapNotNull null
                 val applicationLink = item.optString("applicationLink")
-                if (!applicationLink.startsWith("https://") || !matches(query, "$title $description")) return@mapNotNull null
+                if (!isSafeHttpsUrl(applicationLink) || !matches(query, "$title $description")) return@mapNotNull null
                 val guid = item.optString("guid").ifBlank { applicationLink }
                 val companySlug = item.optString("companySlug")
                 val safeSlug = companySlug.matches(Regex("[A-Za-z0-9_-]{1,100}")) && guid.matches(Regex("[A-Za-z0-9_-]{1,180}"))
@@ -179,7 +181,7 @@ class JobSourceClient(
                 val country = countryFromLocation(location, countries)
                 if (!worldwide && country == null) return@mapNotNull null
                 val url = item.optString("url")
-                if (!url.startsWith("https://") || !matches(query, "$title $description")) return@mapNotNull null
+                if (!isSafeHttpsUrl(url) || !matches(query, "$title $description")) return@mapNotNull null
                 val tags = item.optJSONArray("jobIndustry")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
                 val id = item.optString("id").ifBlank { url }
                 JobListing(
@@ -201,6 +203,71 @@ class JobSourceClient(
         }
     }
 
+
+    fun searchAdzuna(
+        query: String,
+        countries: List<String>,
+        appId: String,
+        appKey: String,
+        limitPerCountry: Int = 20
+    ): SourceResult {
+        if (appId.isBlank() || appKey.isBlank()) {
+            return SourceResult("Adzuna", emptyList(), "Adzuna credentials are not configured.")
+        }
+        val countryCodes = mapOf(
+            "australia" to "au", "au" to "au",
+            "united kingdom" to "gb", "uk" to "gb", "gb" to "gb",
+            "new zealand" to "nz", "nz" to "nz",
+            "germany" to "de", "de" to "de",
+            "canada" to "ca", "ca" to "ca"
+        )
+        val found = mutableListOf<JobListing>()
+        val errors = mutableListOf<String>()
+        countries.distinct().take(5).forEach { selectedCountry ->
+            val code = countryCodes[selectedCountry.trim().lowercase()]
+            if (code == null) {
+                errors += "$selectedCountry: Adzuna country code is not configured."
+                return@forEach
+            }
+            try {
+                val url = "$adzunaBaseUrl/jobs/$code/search/1".toHttpUrl().newBuilder()
+                    .addQueryParameter("app_id", appId.trim())
+                    .addQueryParameter("app_key", appKey.trim())
+                    .addQueryParameter("results_per_page", limitPerCountry.coerceIn(1, 50).toString())
+                    .addQueryParameter("what", query.trim())
+                    .addQueryParameter("content-type", "application/json")
+                    .build()
+                val json = getJson(url.toString())
+                val results = json.optJSONArray("results") ?: org.json.JSONArray()
+                for (i in 0 until results.length()) {
+                    val item = results.optJSONObject(i) ?: continue
+                    val title = item.optString("title")
+                    val description = item.optString("description")
+                    val company = item.optJSONObject("company")?.optString("display_name").orEmpty()
+                    val location = item.optJSONObject("location")?.optString("display_name").orEmpty()
+                    val applyUrl = item.optString("redirect_url")
+                    if (!isSafeHttpsUrl(applyUrl) || !matches(query, "$title $description")) continue
+                    val category = item.optJSONObject("category")?.optString("label").orEmpty()
+                    found += JobListing(
+                        id = stableId("Adzuna", applyUrl),
+                        title = title.ifBlank { "Untitled" },
+                        company = company.ifBlank { "Not specified" },
+                        location = location.ifBlank { selectedCountry },
+                        country = selectedCountry,
+                        description = stripHtml(description).take(12000),
+                        tags = listOf(category).filter(String::isNotBlank),
+                        sourceUrl = applyUrl,
+                        sourceName = "Adzuna",
+                        retrievedAtEpochMs = System.currentTimeMillis()
+                    )
+                }
+            } catch (e: Exception) {
+                errors += "$selectedCountry: " + e.javaClass.simpleName + " (request failed; credentials omitted)"
+            }
+        }
+        return SourceResult("Adzuna", found.distinctBy { it.id }, errors.takeIf { it.isNotEmpty() }?.joinToString())
+    }
+
     fun searchGreenhouse(query: String, countries: List<String>, boardTokens: List<String>): SourceResult {
         if (boardTokens.isEmpty()) return SourceResult("Greenhouse", emptyList(), "No company board IDs configured")
         val found = mutableListOf<JobListing>()
@@ -217,7 +284,7 @@ class JobSourceClient(
                     val country = countryFromLocation(location, countries) ?: continue
                     val description = item.optString("content")
                     val url = item.optString("absolute_url")
-                    if (url.startsWith("https://") && matches(query, "$title $description")) {
+                    if (isSafeHttpsUrl(url) && matches(query, "$title $description")) {
                         found += JobListing(
                             id = stableId("Greenhouse", url), title = title,
                             company = token, location = location, country = country,
@@ -247,7 +314,7 @@ class JobSourceClient(
                     val title = item.optString("text")
                     val categories = item.optJSONObject("categories")
                     val location = categories?.optString("location").orEmpty()
-                    val country = countries.firstOrNull { location.contains(it, true) } ?: continue
+                    val country = countryFromLocation(location, countries) ?: continue
                     val description = item.optString("descriptionPlain").ifBlank { item.optString("description") }
                     val url = item.optString("hostedUrl").ifBlank { item.optString("applyUrl") }
                     if (url.startsWith("https://") && matches(query, "$title $description")) {
@@ -293,11 +360,33 @@ class JobSourceClient(
             "uae" to listOf("uae", "united arab emirates", "dubai", "abu dhabi"),
             "saudi arabia" to listOf("saudi arabia", "riyadh", "jeddah", "dammam")
         )
-        val normalized = location.lowercase()
+        val selectedAliases = mapOf(
+            "au" to "australia", "aus" to "australia",
+            "uk" to "united kingdom", "gb" to "united kingdom",
+            "nz" to "new zealand",
+            "de" to "germany",
+            "ca" to "canada",
+            "ae" to "uae", "uae" to "uae",
+            "sa" to "saudi arabia"
+        )
         return countries.firstOrNull { selected ->
-            val candidates = aliases[selected.lowercase()] ?: listOf(selected.lowercase())
-            candidates.any { alias -> normalized.contains(alias) }
+            val key = selected.trim().lowercase()
+            val canonical = selectedAliases[key] ?: key
+            val candidates = aliases[canonical] ?: listOf(selected.trim())
+            candidates.any { alias ->
+                Regex("(?<![a-z])" + Regex.escape(alias) + "(?![a-z])", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(location)
+            }
         }
+    }
+
+    private fun isSafeHttpsUrl(value: String): Boolean = try {
+        val uri = java.net.URI(value.trim())
+        uri.scheme.equals("https", ignoreCase = true) &&
+            !uri.host.isNullOrBlank() &&
+            uri.userInfo == null
+    } catch (_: Exception) {
+        false
     }
 
     private fun readBodyLimited(body: ResponseBody, maxBytes: Int = 8 * 1024 * 1024): String {
@@ -316,9 +405,10 @@ class JobSourceClient(
         return output.toString(Charsets.UTF_8.name())
     }
 
-    private fun matches(query: String, haystack: String): Boolean =
-        query.isBlank() || query.trim().split(Regex("\\s+")).filter { it.length > 2 }
-            .any { haystack.contains(it, true) }
+    private fun matches(query: String, haystack: String): Boolean {
+        val terms = query.trim().split(Regex("\\s+")).filter { it.length > 2 }
+        return terms.isEmpty() || terms.all { haystack.contains(it, ignoreCase = true) }
+    }
 
     private fun stableId(source: String, url: String): String =
         MessageDigest.getInstance("SHA-256").digest("$source|$url".toByteArray())
