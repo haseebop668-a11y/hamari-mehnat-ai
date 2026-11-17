@@ -95,21 +95,17 @@ class McpStreamableHttpClientTest {
 
     @Test fun parsesMultipleSseEventsAndMultilineDataUntilMatchingResponseId() {
         enqueueModernDiscovery()
-        val progressEvent = JSONObject()
-            .put("jsonrpc", "2.0")
-            .put("method", "notifications/progress")
-            .put("params", JSONObject())
-            .toString()
-        val responseEvent = JSONObject()
-            .put("jsonrpc", "2.0")
-            .put("id", 2)
-            .put(
-                "result",
-                JSONObject().put("resultType", "complete").put("tools", JSONArray())
-            )
-            .toString().replace(",", ",\n")
-        val sseBody = "data: $progressEvent\n\n" +
-            responseEvent.lineSequence().joinToString("\n") { "data: $it" } + "\n\n"
+        // Keep this wire fixture literal: SSE transports one logical JSON
+        // message across multiple data fields, which the client must reassemble.
+        val sseBody = """
+            data: {"jsonrpc":"2.0","method":"notifications/progress","params":{}}
+
+            data: {"jsonrpc":"2.0",
+            data: "id":2,
+            data: "result":{"resultType":"complete",
+            data: "tools":[]}}
+            
+        """.trimIndent()
         server.enqueue(
             MockResponse()
                 .setHeader("Content-Type", "text/event-stream")
