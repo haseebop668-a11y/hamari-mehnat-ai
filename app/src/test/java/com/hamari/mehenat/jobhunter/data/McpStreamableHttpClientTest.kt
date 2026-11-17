@@ -106,10 +106,13 @@ class McpStreamableHttpClientTest {
             data: "tools":[]}}
             
         """.trimIndent()
+        // Keep SSE framing coverage independent from HTTP transfer chunking.
+        // The bounded-body regression below separately exercises chunked HTTP
+        // responses; this test focuses on reassembling multiple SSE data fields.
         server.enqueue(
             MockResponse()
                 .setHeader("Content-Type", "text/event-stream")
-                .setChunkedBody(sseBody, 64)
+                .setBody(sseBody)
         )
         client.connect()
         assertTrue(client.listReadOnlyTools().isEmpty())
